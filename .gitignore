@@ -1,0 +1,26 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+dist/
+drizzle/
+
+# env
+.env
+.env.*
+!.env.example
+
+# logs
+logs/
+*.log
+
+# editor
+.vscode/*
+!.vscode/launch.json
+.idea/
+
+# os
+.DS_Store
+Thumbs.db
+

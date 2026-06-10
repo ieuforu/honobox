@@ -1,0 +1,15 @@
+meta {
+  name: Get All Users
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/users
+  body: none
+}
+
+assert {
+  res.status: eq "200"
+  res.body.total: gte 0
+}

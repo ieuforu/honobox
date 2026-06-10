@@ -1,0 +1,21 @@
+meta {
+  name: Create User
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/users
+  body: json
+  {
+    "name": "Dave",
+    "email": "dave@test.com",
+    "role": "user"
+  }
+}
+
+assert {
+  res.status: eq "201"
+  res.body.data.name: eq "Dave"
+  res.body.data.email: eq "dave@test.com"
+}

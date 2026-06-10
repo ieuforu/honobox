@@ -1,0 +1,17 @@
+meta {
+  name: Delete User
+  type: http
+  seq: 9
+}
+
+delete {
+  url: {{base_url}}/api/users/4
+  headers {
+    Authorization: Bearer {{auth_token}}
+  }
+}
+
+assert {
+  res.status: eq "200"
+  res.body.message: contains "已删除"
+}
