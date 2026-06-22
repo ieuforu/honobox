@@ -14,4 +14,8 @@ export const config = {
   auth: {
     jwtSecret: process.env.JWT_SECRET || 'dev-secret-do-not-use-in-prod',
   },
+  dify: {
+    baseUrl: process.env.DIFY_BASE_URL || 'http://localhost/v1',
+    apiKey: process.env.DIFY_API_KEY || '',
+  },
 } as const

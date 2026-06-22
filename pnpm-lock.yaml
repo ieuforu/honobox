@@ -20,6 +20,9 @@ importers:
       hono:
         specifier: ^4.12.25
         version: 4.12.25
+      nanoid:
+        specifier: ^5.1.15
+        version: 5.1.15
       pg:
         specifier: ^8.21.0
         version: 8.21.0
@@ -930,6 +933,11 @@ packages:
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
+  nanoid@5.1.15:
+    resolution: {integrity: sha512-kBg3RpGtIe+RpTbyXwoI6pk5yD7KUiI3sygUqgeBMRst42KmhB4RZC7eiO9Wa1HIpaCCtpE2DJ6OI4Wi5ebwFw==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
+
   on-exit-leak-free@2.1.2:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
@@ -1595,6 +1603,8 @@ snapshots:
   joycon@3.1.1: {}
 
   minimist@1.2.8: {}
+
+  nanoid@5.1.15: {}
 
   on-exit-leak-free@2.1.2: {}
 

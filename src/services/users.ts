@@ -17,7 +17,11 @@ function formatUser(row: UserSelect): UserResponse {
 export const userService = {
   async findAll(search?: string) {
     const rows = search
-      ? await db.select().from(users).where(ilike(users.name, `%${search}%`)).orderBy(desc(users.createdAt))
+      ? await db
+          .select()
+          .from(users)
+          .where(ilike(users.name, `%${search}%`))
+          .orderBy(desc(users.createdAt))
       : await db.select().from(users).orderBy(desc(users.createdAt))
     return rows.map(formatUser)
   },
@@ -39,7 +43,11 @@ export const userService = {
   },
 
   async update(id: number, input: { name?: string; email?: string; role?: 'admin' | 'user' }) {
-    const [row] = await db.update(users).set({ ...input, updatedAt: new Date() }).where(eq(users.id, id)).returning()
+    const [row] = await db
+      .update(users)
+      .set({ ...input, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning()
     return row ? formatUser(row) : null
   },
 

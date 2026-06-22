@@ -14,10 +14,7 @@ interface ZodLikeError {
   issues?: ZodIssue[]
 }
 
-export const validator = <T extends ZodSchema>(
-  schema: T,
-  target: ValidationTarget = 'json'
-) =>
+export const validator = <T extends ZodSchema>(schema: T, target: ValidationTarget = 'json') =>
   createMiddleware<{ Variables: Variables }>(async (c, next) => {
     try {
       let data: unknown
@@ -52,7 +49,7 @@ export const validator = <T extends ZodSchema>(
               message: e.message,
             })),
           },
-          400
+          400,
         )
       }
       throw err

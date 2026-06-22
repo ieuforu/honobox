@@ -7,4 +7,5 @@ export type Variables = {
   validatedBody: Record<string, unknown>
   validatedQuery: Record<string, string>
   validatedParam: Record<string, string>
+  traceId: string
 }
