@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.14",
+    "@orpc/client": "^1.14.6",
+    "@orpc/server": "^1.14.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.25",
