@@ -4,15 +4,12 @@ import { chatRoutes } from '../chat'
 
 // Mock dependencies
 vi.mock('../../providers/index.js', () => ({
-  getEnabledModels: () => [
-    { id: 'test-model', name: 'Test', provider: 'openai', enabled: true },
-  ],
-  getProvider: (id: string) => ({
+  createProvider: () => ({
     chatCompletion: vi.fn().mockResolvedValue({
       id: 'test-id',
       object: 'chat.completion',
       created: Date.now(),
-      model: id,
+      model: 'test-model',
       choices: [{ index: 0, message: { role: 'assistant', content: 'Hello' }, finish_reason: 'stop' }],
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     }),
@@ -21,7 +18,7 @@ vi.mock('../../providers/index.js', () => ({
         id: 'test-id',
         object: 'chat.completion.chunk',
         created: Date.now(),
-        model: id,
+        model: 'test-model',
         choices: [{ index: 0, delta: { content: 'Hi' }, finish_reason: null }],
       }
     }),
@@ -42,11 +39,31 @@ vi.mock('../../lib/event-bus.js', () => ({
 }))
 
 vi.mock('../../db/index.js', () => ({
-  db: { insert: () => ({ values: () => Promise.resolve() }) },
+  db: {
+    insert: () => ({ values: () => Promise.resolve() }),
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: () => Promise.resolve([{
+            id: '1',
+            name: 'Test Model',
+            provider: 'openai',
+            modelId: 'test-model',
+            baseUrl: 'https://api.openai.com/v1',
+            apiKey: 'sk-test',
+            maxTokens: null,
+            enabled: true,
+            createdAt: new Date(),
+          }]),
+        }),
+      }),
+    }),
+  },
 }))
 
 vi.mock('../../db/schema/index.js', () => ({
   llmRequests: {},
+  models: {},
 }))
 
 describe('chat routes', () => {

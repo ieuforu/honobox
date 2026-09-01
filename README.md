@@ -10,8 +10,7 @@ Open-source LLM Gateway with real-time monitoring dashboard.
 
 ## Features
 
-- **Multi-model routing** — OpenAI, Anthropic, DeepSeek, custom providers
-- **OpenAI-compatible API** — Drop-in replacement for `/v1/chat/completions`
+- **Multi-model routing** — OpenAI-compatible API, supports any provider (OpenAI, Anthropic, DeepSeek, local models)
 - **Real-time monitoring** — SSE-based live dashboard updates
 - **API Key management** — Database-backed keys with per-key rate limiting
 - **Model management** — CRUD models via API or dashboard
@@ -60,7 +59,7 @@ pnpm install
 
 # Configure environment
 cp apps/gateway/.env.example apps/gateway/.env
-# Edit apps/gateway/.env with your API keys
+# Edit apps/gateway/.env with your database credentials
 ```
 
 ### 3. Initialize Database
@@ -164,13 +163,14 @@ honobox/
 │   │   │   ├── routes/       # API routes
 │   │   │   ├── middlewares/  # Auth, rate-limit, trace
 │   │   │   ├── db/           # Drizzle schema & connection
-│   │   │   └── lib/          # Logger, event-bus, etc.
+│   │   │   └── lib/          # Logger, event-bus, request-store
 │   │   └── drizzle.config.ts
 │   │
 │   └── dashboard/        # React frontend
 │       └── src/
 │           ├── features/     # Dashboard, API Keys, Models, Logs
-│           └── components/   # Layout, UI components
+│           ├── components/   # Layout, UI components
+│           └── lib/          # SSE client
 │
 ├── packages/
 │   └── shared/           # Shared TypeScript types
