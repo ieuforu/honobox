@@ -1,12 +1,16 @@
-// SSE client for real-time updates
+// SSE client for real-time updates - singleton
 
 type EventHandler = (data: any) => void
 
 class SSEClient {
   private eventSource: EventSource | null = null
   private handlers = new Map<string, Set<EventHandler>>()
+  private connected = false
 
   connect() {
+    if (this.connected) return
+    this.connected = true
+
     this.eventSource = new EventSource('/api/events')
 
     this.eventSource.onopen = () => {
@@ -14,7 +18,10 @@ class SSEClient {
     }
 
     this.eventSource.onerror = () => {
-      console.log('SSE disconnected, reconnecting...')
+      console.log('SSE disconnected')
+      this.connected = false
+      // Auto reconnect after 3s
+      setTimeout(() => this.connect(), 3000)
     }
 
     // Listen for named events
@@ -42,6 +49,7 @@ class SSEClient {
   disconnect() {
     this.eventSource?.close()
     this.eventSource = null
+    this.connected = false
   }
 }
 

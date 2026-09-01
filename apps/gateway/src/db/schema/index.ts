@@ -9,3 +9,6 @@ export type { RateLimitSelect, RateLimitInsert } from './rate-limits'
 
 export { apiKeys } from './api-keys'
 export type { ApiKeySelect, ApiKeyInsert } from './api-keys'
+
+export { models } from './models'
+export type { ModelSelect, ModelInsert } from './models'

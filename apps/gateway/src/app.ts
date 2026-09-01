@@ -12,6 +12,7 @@ import { chatRoutes } from './routes/chat.js'
 import { apiKeyRoutes } from './routes/api-keys.js'
 import { statsRoutes } from './routes/stats.js'
 import { eventsRoutes } from './routes/events.js'
+import { modelRoutes } from './routes/models.js'
 import type { Variables } from './types/index.js'
 
 const app = new Hono<{ Variables: Variables }>()
@@ -58,6 +59,7 @@ app.route('/api/events', eventsRoutes)
 // ============ API 路由（需要认证） ============
 app.route('/v1/chat', chatRoutes)
 app.route('/api/api-keys', apiKeyRoutes)
+app.route('/api/models', modelRoutes)
 app.route('/api/stats', statsRoutes)
 app.route('/api/users', userRoutes)
 

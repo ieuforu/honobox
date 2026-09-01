@@ -1,13 +1,31 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { DashboardPage } from './features/dashboard/DashboardPage'
 import { ApiKeysPage } from './features/api-keys/ApiKeysPage'
 import { ModelsPage } from './features/models/ModelsPage'
 import { LogsPage } from './features/logs/LogsPage'
 import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
+import { sseClient } from './lib/sse'
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard')
+  const queryClient = useQueryClient()
+
+  // Global SSE connection - only once
+  useEffect(() => {
+    sseClient.connect()
+
+    const unsub = sseClient.on('request:end', () => {
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      queryClient.invalidateQueries({ queryKey: ['logs'] })
+    })
+
+    return () => {
+      unsub()
+      // Don't disconnect SSE on page change
+    }
+  }, [queryClient])
 
   return (
     <div className="flex h-screen bg-gray-50">

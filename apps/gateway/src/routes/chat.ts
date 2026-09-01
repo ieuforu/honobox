@@ -1,14 +1,16 @@
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
-import { getProvider, getEnabledModels } from '../providers/index.js'
+import { eq } from 'drizzle-orm'
 import { logLLMRequest } from '../lib/llm-logger.js'
 import { addRequestLog, getStats } from '../lib/request-store.js'
 import { eventBus } from '../lib/event-bus.js'
 import { db } from '../db/index.js'
-import { llmRequests } from '../db/schema/index.js'
+import { llmRequests, models } from '../db/schema/index.js'
+import { createProvider } from '../providers/index.js'
 import { rateLimitMiddleware } from '../middlewares/rate-limit.js'
 import type { Variables } from '../types/index.js'
+import type { ModelConfig } from '@ai-gateway/shared'
 
 const chatBodySchema = z.object({
   model: z.string().min(1),
@@ -26,15 +28,22 @@ const chatRoutes = new Hono<{ Variables: Variables }>()
 // Apply rate limiting
 chatRoutes.use('/completions', rateLimitMiddleware)
 
-// GET /v1/chat/models - List available models
-chatRoutes.get('/models', (c) => {
-  const models = getEnabledModels().map(m => ({
-    id: m.id,
-    object: 'model',
-    created: Math.floor(Date.now() / 1000),
-    owned_by: m.provider,
-  }))
-  return c.json({ data: models })
+// GET /v1/chat/models - List available models from database
+chatRoutes.get('/models', async (c) => {
+  try {
+    const dbModels = await db.select().from(models).where(eq(models.enabled, true))
+    return c.json({
+      data: dbModels.map(m => ({
+        id: m.modelId,
+        object: 'model',
+        created: Math.floor(new Date(m.createdAt).getTime() / 1000),
+        owned_by: m.provider,
+      })),
+    })
+  } catch (err) {
+    console.error('Failed to fetch models:', err)
+    return c.json({ data: [] })
+  }
 })
 
 // POST /v1/chat/completions - OpenAI-compatible chat completion
@@ -62,7 +71,37 @@ chatRoutes.post('/completions', async (c) => {
   let errorMsg: string | undefined
 
   try {
-    const provider = getProvider(body.model)
+    // Get model from database
+    const dbModel = await db.select().from(models).where(eq(models.modelId, body.model)).limit(1)
+    if (!dbModel[0]) {
+      return c.json({
+        error: {
+          message: `Model not found: ${body.model}`,
+          type: 'invalid_request_error',
+        },
+      }, 404)
+    }
+
+    if (!dbModel[0].enabled) {
+      return c.json({
+        error: {
+          message: `Model is disabled: ${body.model}`,
+          type: 'invalid_request_error',
+        },
+      }, 400)
+    }
+
+    // Create provider from database config
+    const modelConfig: ModelConfig = {
+      id: dbModel[0].modelId,
+      name: dbModel[0].name,
+      provider: dbModel[0].provider as any,
+      baseUrl: dbModel[0].baseUrl,
+      apiKey: dbModel[0].apiKey,
+      maxTokens: dbModel[0].maxTokens ?? undefined,
+      enabled: dbModel[0].enabled,
+    }
+    const provider = createProvider(modelConfig)
 
     if (body.stream) {
       // Streaming response
@@ -148,7 +187,7 @@ chatRoutes.post('/completions', async (c) => {
       timestamp: new Date().toISOString(),
     })
 
-    // Emit events for WebSocket
+    // Emit events for SSE
     eventBus.emit('request:end', {
       id: requestId,
       requestId,
