@@ -11,6 +11,7 @@ import healthRoutes from './routes/health.js'
 import { chatRoutes } from './routes/chat.js'
 import { apiKeyRoutes } from './routes/api-keys.js'
 import { statsRoutes } from './routes/stats.js'
+import { eventsRoutes } from './routes/events.js'
 import type { Variables } from './types/index.js'
 
 const app = new Hono<{ Variables: Variables }>()
@@ -52,6 +53,7 @@ app.use('*', async (c, next) => {
 
 // ============ 公开路由 ============
 app.route('/health', healthRoutes)
+app.route('/api/events', eventsRoutes)
 
 // ============ API 路由（需要认证） ============
 app.route('/v1/chat', chatRoutes)

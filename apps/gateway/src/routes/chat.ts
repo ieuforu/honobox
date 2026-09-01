@@ -3,7 +3,8 @@ import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { getProvider, getEnabledModels } from '../providers/index.js'
 import { logLLMRequest } from '../lib/llm-logger.js'
-import { addRequestLog } from '../lib/request-store.js'
+import { addRequestLog, getStats } from '../lib/request-store.js'
+import { eventBus } from '../lib/event-bus.js'
 import { db } from '../db/index.js'
 import { llmRequests } from '../db/schema/index.js'
 import { rateLimitMiddleware } from '../middlewares/rate-limit.js'
@@ -146,6 +147,19 @@ chatRoutes.post('/completions', async (c) => {
       error: errorMsg ?? null,
       timestamp: new Date().toISOString(),
     })
+
+    // Emit events for WebSocket
+    eventBus.emit('request:end', {
+      id: requestId,
+      requestId,
+      model: body.model,
+      timestamp: new Date().toISOString(),
+      latencyMs,
+      statusCode,
+      totalTokens: promptTokens + completionTokens,
+      status: statusCode < 400 ? 'success' : 'error',
+    })
+    eventBus.emit('stats:update', getStats())
 
     // Log to database (async, don't block response)
     db.insert(llmRequests)

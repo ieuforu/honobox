@@ -8,8 +8,7 @@ const lines = [
   '',
   `Local:   http://localhost:${config.port}`,
   `Mode:    ${mode}`,
-  `Routes:  /api/health`,
-  `         /api/users`,
+  `SSE:     http://localhost:${config.port}/api/events`,
 ]
 
 const width = 42
