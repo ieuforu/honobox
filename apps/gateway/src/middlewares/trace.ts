@@ -10,6 +10,7 @@ import type { MiddlewareHandler } from 'hono'
 export const traceMiddleware: MiddlewareHandler = async (c, next) => {
   const traceId = c.req.header('x-trace-id') ?? nanoid(12)
   c.set('traceId', traceId)
+  c.set('requestId', traceId)
   await next()
   c.header('x-trace-id', traceId)
 }

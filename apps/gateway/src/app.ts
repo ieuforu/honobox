@@ -3,13 +3,15 @@ import { logger } from 'hono/logger'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { timing } from 'hono/timing'
-import pinoLogger from './lib/logger'
-import { traceMiddleware } from './middlewares/trace'
-import { rpcHandler } from './orpc/handler'
-import userRoutes from './routes/users'
-import healthRoutes from './routes/health'
-import chatRoutes from './routes/chat'
-import type { Variables } from './types'
+import pinoLogger from './lib/logger.js'
+import { traceMiddleware } from './middlewares/trace.js'
+import { rpcHandler } from './orpc/handler.js'
+import userRoutes from './routes/users.js'
+import healthRoutes from './routes/health.js'
+import { chatRoutes } from './routes/chat.js'
+import { apiKeyRoutes } from './routes/api-keys.js'
+import { statsRoutes } from './routes/stats.js'
+import type { Variables } from './types/index.js'
 
 const app = new Hono<{ Variables: Variables }>()
 
@@ -48,10 +50,14 @@ app.use('*', async (c, next) => {
   )
 })
 
-// ============ Hono 路由挂载 ============
-app.route('/api/health', healthRoutes)
+// ============ 公开路由 ============
+app.route('/health', healthRoutes)
+
+// ============ API 路由（需要认证） ============
+app.route('/v1/chat', chatRoutes)
+app.route('/api/api-keys', apiKeyRoutes)
+app.route('/api/stats', statsRoutes)
 app.route('/api/users', userRoutes)
-app.route('/api/chat', chatRoutes)
 
 // ============ 全局错误处理 ============
 app.onError((err, c) => {

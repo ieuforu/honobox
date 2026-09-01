@@ -3,6 +3,7 @@ import { pgTable, uuid, varchar, integer, boolean, text, timestamp } from 'drizz
 export const llmRequests = pgTable('llm_requests', {
   id: uuid('id').primaryKey().defaultRandom(),
   traceId: varchar('trace_id', { length: 64 }).notNull(),
+  requestId: varchar('request_id', { length: 64 }),
   model: varchar('model', { length: 100 }).notNull(),
   latencyMs: integer('latency_ms').notNull(),
   statusCode: integer('status_code').notNull(),

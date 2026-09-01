@@ -1,26 +1,8 @@
-# deps
-node_modules/
-.pnpm-store/
-
-# build
-dist/
-drizzle/
-
-# env
+node_modules
+dist
 .env
-.env.*
-!.env.example
-
-# logs
-logs/
+.env.local
 *.log
-
-# editor
-.vscode/*
-!.vscode/launch.json
-.idea/
-
-# os
 .DS_Store
-Thumbs.db
-
+.wrangler
+.turbo
