@@ -2,6 +2,12 @@
 
 Open-source LLM Gateway with real-time monitoring dashboard.
 
+## Preview
+
+![Dashboard](preview/截屏2026-09-01%2015.58.09.png)
+
+![API Management](preview/截屏2026-09-01%2016.03.37.png)
+
 ## Features
 
 - **Multi-model routing** — OpenAI, Anthropic, DeepSeek, custom providers
