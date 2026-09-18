@@ -8,9 +8,12 @@ import { eventBus } from '../lib/event-bus.js'
 import { db } from '../db/index.js'
 import { llmRequests, models } from '../db/schema/index.js'
 import { createProvider } from '../providers/index.js'
+import { isAbortError, isRetryableProviderError } from '../providers/errors.js'
 import { rateLimitMiddleware } from '../middlewares/rate-limit.js'
 import type { Variables } from '../types/index.js'
 import { getModelConfig } from './models.js'
+import { modelCircuitBreaker } from '../lib/circuit-breaker.js'
+import type { ModelConfig } from '@ai-gateway/shared'
 
 const chatBodySchema = z.object({
   model: z.string().min(1),
@@ -26,6 +29,21 @@ const chatBodySchema = z.object({
 })
 
 const chatRoutes = new Hono<{ Variables: Variables }>()
+
+class CircuitOpenError extends Error {
+  constructor(modelId: string) {
+    super(`Model temporarily unavailable: ${modelId}`)
+    this.name = 'CircuitOpenError'
+  }
+}
+
+async function getModelAttempts(primary: ModelConfig): Promise<ModelConfig[]> {
+  if (!primary.fallbackModelId) return [primary]
+
+  const fallback = await getModelConfig(primary.fallbackModelId)
+  if (!fallback?.enabled || fallback.id === primary.id) return [primary]
+  return [primary, fallback]
+}
 
 // Apply rate limiting
 chatRoutes.use('/completions', rateLimitMiddleware)
@@ -74,6 +92,8 @@ chatRoutes.post('/completions', async (c) => {
   let promptTokens = 0
   let completionTokens = 0
   let errorMsg: string | undefined
+  let servedModel = body.model
+  let isFallback = false
   let finalizeInOuterScope = true
   let finalized = false
 
@@ -87,6 +107,8 @@ chatRoutes.post('/completions', async (c) => {
       traceId,
       requestId,
       model: body.model,
+      servedModel,
+      isFallback,
       latencyMs,
       statusCode,
       promptTokens,
@@ -98,7 +120,7 @@ chatRoutes.post('/completions', async (c) => {
     eventBus.emit('request:end', {
       id: requestId,
       requestId,
-      model: body.model,
+      model: servedModel,
       timestamp: new Date().toISOString(),
       latencyMs,
       statusCode,
@@ -113,6 +135,8 @@ chatRoutes.post('/completions', async (c) => {
         traceId,
         requestId,
         model: body.model,
+        servedModel,
+        isFallback,
         latencyMs,
         statusCode,
         promptTokens,
@@ -126,9 +150,10 @@ chatRoutes.post('/completions', async (c) => {
     logLLMRequest({
       traceId,
       model: body.model,
+      servedModel,
       latencyMs,
       statusCode,
-      isFallback: false,
+      isFallback,
       promptTokens,
       completionTokens,
       error: errorMsg,
@@ -163,7 +188,7 @@ chatRoutes.post('/completions', async (c) => {
       )
     }
 
-    const provider = createProvider(modelConfig)
+    const attempts = await getModelAttempts(modelConfig)
 
     if (body.stream) {
       // The stream owns request finalization; the outer handler returns as soon
@@ -176,23 +201,63 @@ chatRoutes.post('/completions', async (c) => {
         })
 
         try {
-          const generator = provider.chatCompletionStream({
-            model: body.model,
-            messages: body.messages,
-            stream: true,
-            temperature: body.temperature,
-            max_tokens: body.max_tokens,
-            signal: abortController.signal,
-          })
+          let completed = false
+          let emittedChunk = false
+          let lastError: unknown
 
-          for await (const chunk of generator) {
-            if (stream.aborted) break
-            await stream.writeSSE({ data: JSON.stringify(chunk) })
+          for (const [index, config] of attempts.entries()) {
+            const hasFallback = index < attempts.length - 1
+            servedModel = config.id
+            isFallback = index > 0
+            if (!modelCircuitBreaker.canAttempt(config.id)) {
+              lastError = new CircuitOpenError(config.id)
+              if (hasFallback && !emittedChunk) {
+                continue
+              }
+              throw lastError
+            }
+
+            try {
+              const provider = createProvider(config)
+              const generator = provider.chatCompletionStream({
+                model: config.id,
+                messages: body.messages,
+                stream: true,
+                temperature: body.temperature,
+                max_tokens: body.max_tokens,
+                signal: abortController.signal,
+              })
+
+              for await (const chunk of generator) {
+                if (abortController.signal.aborted || stream.aborted) {
+                  throw new DOMException('Downstream client disconnected', 'AbortError')
+                }
+                emittedChunk = true
+                await stream.writeSSE({ data: JSON.stringify(chunk) })
+              }
+
+              modelCircuitBreaker.recordSuccess(config.id)
+              completed = true
+              break
+            } catch (err) {
+              lastError = err
+              if (isRetryableProviderError(err)) modelCircuitBreaker.recordFailure(config.id)
+              if (
+                isAbortError(err) ||
+                emittedChunk ||
+                !hasFallback ||
+                !isRetryableProviderError(err)
+              ) {
+                throw err
+              }
+            }
           }
+
+          if (!completed) throw lastError ?? new Error('No model available')
           if (!stream.aborted) await stream.writeSSE({ data: '[DONE]' })
         } catch (err) {
-          const aborted = abortController.signal.aborted
-          statusCode = aborted ? 499 : 500
+          const aborted = abortController.signal.aborted || isAbortError(err)
+          statusCode = aborted ? 499 : err instanceof CircuitOpenError ? 503 : 502
           errorMsg = aborted
             ? 'Downstream client disconnected'
             : err instanceof Error
@@ -211,21 +276,46 @@ chatRoutes.post('/completions', async (c) => {
       })
     }
 
-    // Non-streaming response
-    const response = await provider.chatCompletion({
-      model: body.model,
-      messages: body.messages,
-      temperature: body.temperature,
-      max_tokens: body.max_tokens,
-      signal: c.req.raw.signal,
-    })
+    // Non-streaming response: retry once on the configured fallback model, but
+    // never for validation/auth failures or a cancelled downstream request.
+    let response
+    let lastError: unknown
+    for (const [index, config] of attempts.entries()) {
+      const hasFallback = index < attempts.length - 1
+      servedModel = config.id
+      isFallback = index > 0
+      if (!modelCircuitBreaker.canAttempt(config.id)) {
+        lastError = new CircuitOpenError(config.id)
+        if (hasFallback) {
+          continue
+        }
+        throw lastError
+      }
+
+      try {
+        response = await createProvider(config).chatCompletion({
+          model: config.id,
+          messages: body.messages,
+          temperature: body.temperature,
+          max_tokens: body.max_tokens,
+          signal: c.req.raw.signal,
+        })
+        modelCircuitBreaker.recordSuccess(config.id)
+        break
+      } catch (err) {
+        lastError = err
+        if (isRetryableProviderError(err)) modelCircuitBreaker.recordFailure(config.id)
+        if (isAbortError(err) || !hasFallback || !isRetryableProviderError(err)) throw err
+      }
+    }
+    if (!response) throw lastError ?? new Error('No model available')
 
     promptTokens = response.usage.prompt_tokens
     completionTokens = response.usage.completion_tokens
 
     return c.json(response)
   } catch (err) {
-    statusCode = 500
+    statusCode = isAbortError(err) ? 499 : err instanceof CircuitOpenError ? 503 : 502
     errorMsg = err instanceof Error ? err.message : String(err)
 
     return c.json(
@@ -235,7 +325,7 @@ chatRoutes.post('/completions', async (c) => {
           type: 'server_error',
         },
       },
-      500,
+      statusCode === 503 ? 503 : 502,
     )
   } finally {
     if (finalizeInOuterScope) await finalizeRequest()

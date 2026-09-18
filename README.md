@@ -9,6 +9,7 @@ An authenticated, OpenAI-compatible LLM gateway with streaming proxying, encrypt
 HonoBox focuses on the parts of an LLM gateway that are easy to get subtly wrong:
 
 - **Streaming lifecycle** — downstream disconnects propagate through `AbortSignal` and cancel the upstream request.
+- **Failure isolation** — per-model circuit breakers and retry-before-first-token failover avoid cascading provider failures without mixing streamed output.
 - **Separated access paths** — gateway API keys protect inference traffic; an independent admin token protects the control plane.
 - **Secret handling** — gateway keys are stored as SHA-256 hashes and provider keys are encrypted with AES-256-GCM.
 - **Request visibility** — trace IDs, latency, token usage, errors, and live SSE updates are available in the dashboard.
@@ -22,7 +23,8 @@ Application                       React control plane
     ▼                                   ▼
 ┌──────────────────────────────────────────────────────────┐
 │                     Hono gateway                         │
-│ auth → rate limit → provider adapter → stream lifecycle │
+│ auth → rate limit → circuit breaker → provider adapter  │
+│                       retry/failover → stream lifecycle  │
 └───────────────────┬───────────────────────┬──────────────┘
                     │                       │
               LLM providers           PostgreSQL
@@ -87,7 +89,9 @@ curl -X POST http://localhost:3000/api/api-keys \
   -d '{"name":"local-app","rateLimit":100}'
 ```
 
-The generated gateway key is returned once. Only its hash and display prefix are persisted.
+The generated gateway key is returned once. Only its hash and display prefix are persisted. A model can optionally reference another enabled model as its fallback in the dashboard or through the `fallbackModelId` field.
+
+Failover is intentionally conservative: only network errors, timeouts, rate limits, and upstream 5xx responses are retryable. Streaming requests switch providers only before the first chunk reaches the client; once output begins, HonoBox never combines content from two providers.
 
 ## OpenAI-compatible usage
 
@@ -118,12 +122,12 @@ This runs linting, type checking, tests, and production builds for every workspa
 - Gateway API keys are shown once and compared by hash.
 - Provider credentials are encrypted at rest with `MODEL_ENCRYPTION_KEY`.
 - Deploy behind HTTPS and rotate both admin and encryption secrets through your platform's secret manager.
-- HonoBox is currently a single-node gateway; distributed quotas and multi-node coordination remain roadmap items.
+- HonoBox is currently a single-node gateway; rate limits and traces are shared through PostgreSQL, while circuit state is process-local.
 
 ## Roadmap
 
 - Weighted provider routing and health-aware failover
-- Circuit breaking and retry-before-first-token semantics
+- Distributed circuit-breaker state for multi-node deployments
 - OpenTelemetry and Prometheus export
 - Reproducible fault-injection and load-test scenarios
 

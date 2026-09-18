@@ -24,17 +24,17 @@ statsRoutes.get('/', async (c) => {
 
     const byModel = await db.execute(sql`
       SELECT
-        model,
+        served_model,
         COUNT(*) as requests,
         COALESCE(SUM(prompt_tokens + completion_tokens), 0) as tokens
       FROM llm_requests
       WHERE created_at > NOW() - INTERVAL '24 hours'
-      GROUP BY model
+      GROUP BY served_model
     `)
 
     const byModelMap: Record<string, { requests: number; tokens: number }> = {}
     for (const row of byModel.rows) {
-      byModelMap[row.model as string] = {
+      byModelMap[row.served_model as string] = {
         requests: Number(row.requests),
         tokens: Number(row.tokens),
       }
@@ -62,6 +62,8 @@ statsRoutes.get('/logs', async (c) => {
         trace_id as "traceId",
         request_id as "requestId",
         model,
+        served_model as "servedModel",
+        is_fallback as "isFallback",
         latency_ms as "latencyMs",
         status_code as "statusCode",
         prompt_tokens as "promptTokens",
@@ -92,6 +94,8 @@ statsRoutes.get('/logs', async (c) => {
         id: log.id,
         requestId: log.requestId,
         model: log.model,
+        servedModel: log.servedModel,
+        isFallback: log.isFallback,
         latencyMs: log.latencyMs,
         statusCode: log.statusCode,
         promptTokens: log.promptTokens,

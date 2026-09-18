@@ -34,6 +34,7 @@ const createModelSchema = z.object({
   baseUrl: z.string().url(),
   apiKey: z.string().min(1),
   maxTokens: z.number().positive().nullable().default(null),
+  fallbackModelId: z.string().min(1).nullable().default(null),
 })
 
 modelRoutes.post('/', async (c) => {
@@ -44,6 +45,18 @@ modelRoutes.post('/', async (c) => {
 
   try {
     const { apiKey, ...model } = parsed.data
+    if (model.fallbackModelId === model.modelId) {
+      return c.json({ error: 'A model cannot fall back to itself' }, 400)
+    }
+    if (model.fallbackModelId) {
+      const fallback = await db
+        .select({ id: models.id })
+        .from(models)
+        .where(eq(models.modelId, model.fallbackModelId))
+        .limit(1)
+      if (!fallback[0]) return c.json({ error: 'Fallback model not found' }, 400)
+    }
+
     const result = await db
       .insert(models)
       .values({ ...model, apiKeyEncrypted: encryptSecret(apiKey) })
@@ -104,6 +117,7 @@ export async function getModelConfig(modelId: string): Promise<ModelConfig | nul
     baseUrl: model.baseUrl,
     apiKey: decryptSecret(model.apiKeyEncrypted),
     maxTokens: model.maxTokens ?? undefined,
+    fallbackModelId: model.fallbackModelId ?? undefined,
     enabled: model.enabled,
   }
 }

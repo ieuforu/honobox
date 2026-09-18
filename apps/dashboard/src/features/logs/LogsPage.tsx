@@ -6,6 +6,8 @@ interface RequestLog {
   id: string
   requestId: string
   model: string
+  servedModel: string
+  isFallback: boolean
   latencyMs: number
   statusCode: number
   promptTokens: number
@@ -63,7 +65,14 @@ export function LogsPage() {
               {logs?.map((log) => (
                 <tr key={log.id} className="border-b border-gray-50">
                   <td className="px-4 py-3">{statusIcon(log.status)}</td>
-                  <td className="px-4 py-3 font-medium">{log.model}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <div>{log.servedModel || log.model}</div>
+                    {log.isFallback && (
+                      <div className="mt-0.5 text-xs font-normal text-amber-600">
+                        fallback from {log.model}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-sm text-gray-500">{log.totalTokens}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{log.latencyMs}ms</td>
                   <td className="px-4 py-3">

@@ -5,6 +5,7 @@ import type {
   ChatCompletionResponse,
   ChatCompletionChunk,
 } from './types.js'
+import { ProviderRequestError } from './errors.js'
 
 export class OpenAIProvider implements ModelProviderInterface {
   constructor(private config: ModelConfig) {}
@@ -28,7 +29,11 @@ export class OpenAIProvider implements ModelProviderInterface {
 
     if (!response.ok) {
       const text = await response.text()
-      throw new Error(`OpenAI API error ${response.status}: ${text}`)
+      throw new ProviderRequestError(
+        'openai',
+        response.status,
+        `OpenAI API error ${response.status}: ${text}`,
+      )
     }
 
     return response.json()
@@ -53,11 +58,15 @@ export class OpenAIProvider implements ModelProviderInterface {
 
     if (!response.ok) {
       const text = await response.text()
-      throw new Error(`OpenAI API error ${response.status}: ${text}`)
+      throw new ProviderRequestError(
+        'openai',
+        response.status,
+        `OpenAI API error ${response.status}: ${text}`,
+      )
     }
 
     if (!response.body) {
-      throw new Error('No response body')
+      throw new ProviderRequestError('openai', undefined, 'OpenAI API returned no response body')
     }
 
     const reader = response.body.getReader()

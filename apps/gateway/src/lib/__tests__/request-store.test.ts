@@ -7,6 +7,8 @@ describe('request-store', () => {
     traceId: 'trace-123',
     requestId: 'req-123',
     model: 'gpt-4o',
+    servedModel: 'gpt-4o',
+    isFallback: false,
     latencyMs: 100,
     statusCode: 200,
     promptTokens: 10,
@@ -69,8 +71,8 @@ describe('request-store', () => {
     })
 
     it('should group by model', () => {
-      addRequestLog(createLog({ model: 'gpt-4o' }))
-      addRequestLog(createLog({ model: 'claude-3' }))
+      addRequestLog(createLog({ model: 'gpt-4o', servedModel: 'gpt-4o' }))
+      addRequestLog(createLog({ model: 'claude-3', servedModel: 'claude-3' }))
       const stats = getStats()
       expect(stats.byModel['gpt-4o']).toBeDefined()
       expect(stats.byModel['claude-3']).toBeDefined()

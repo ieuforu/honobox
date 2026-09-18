@@ -8,6 +8,7 @@ export interface ModelConfig {
   baseUrl: string
   apiKey: string
   maxTokens?: number
+  fallbackModelId?: string
   enabled: boolean
 }
 
@@ -81,6 +82,8 @@ export interface RequestLog {
   id: string
   requestId: string
   model: string
+  servedModel: string
+  isFallback: boolean
   latencyMs: number
   statusCode: number
   totalTokens: number

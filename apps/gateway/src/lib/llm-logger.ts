@@ -3,6 +3,7 @@ import baseLogger from './logger'
 export interface LLMRequestLog {
   traceId: string
   model: string
+  servedModel: string
   latencyMs: number
   statusCode: number
   isFallback: boolean

@@ -8,6 +8,7 @@ export const models = pgTable('models', {
   baseUrl: varchar('base_url', { length: 256 }).notNull(),
   apiKeyEncrypted: text('api_key_encrypted').notNull(),
   maxTokens: integer('max_tokens'),
+  fallbackModelId: varchar('fallback_model_id', { length: 100 }),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })

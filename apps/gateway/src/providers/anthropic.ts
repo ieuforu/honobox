@@ -5,6 +5,7 @@ import type {
   ChatCompletionResponse,
   ChatCompletionChunk,
 } from './types.js'
+import { ProviderRequestError } from './errors.js'
 
 export class AnthropicProvider implements ModelProviderInterface {
   constructor(private config: ModelConfig) {}
@@ -31,7 +32,11 @@ export class AnthropicProvider implements ModelProviderInterface {
 
     if (!response.ok) {
       const text = await response.text()
-      throw new Error(`Anthropic API error ${response.status}: ${text}`)
+      throw new ProviderRequestError(
+        'anthropic',
+        response.status,
+        `Anthropic API error ${response.status}: ${text}`,
+      )
     }
 
     const data = await response.json()
@@ -79,11 +84,19 @@ export class AnthropicProvider implements ModelProviderInterface {
 
     if (!response.ok) {
       const text = await response.text()
-      throw new Error(`Anthropic API error ${response.status}: ${text}`)
+      throw new ProviderRequestError(
+        'anthropic',
+        response.status,
+        `Anthropic API error ${response.status}: ${text}`,
+      )
     }
 
     if (!response.body) {
-      throw new Error('No response body')
+      throw new ProviderRequestError(
+        'anthropic',
+        undefined,
+        'Anthropic API returned no response body',
+      )
     }
 
     const reader = response.body.getReader()

@@ -5,6 +5,8 @@ export interface RequestLogEntry {
   traceId: string
   requestId: string
   model: string
+  servedModel: string
+  isFallback: boolean
   latencyMs: number
   statusCode: number
   promptTokens: number
@@ -42,9 +44,9 @@ export function getStats() {
 
   const byModel: Record<string, { requests: number; tokens: number }> = {}
   for (const log of requestLogs) {
-    byModel[log.model] = byModel[log.model] || { requests: 0, tokens: 0 }
-    byModel[log.model].requests++
-    byModel[log.model].tokens += log.promptTokens + log.completionTokens
+    byModel[log.servedModel] = byModel[log.servedModel] || { requests: 0, tokens: 0 }
+    byModel[log.servedModel].requests++
+    byModel[log.servedModel].tokens += log.promptTokens + log.completionTokens
   }
 
   return {

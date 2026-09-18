@@ -4,6 +4,8 @@ interface RecentRequestsProps {
   logs?: Array<{
     id: string
     model: string
+    servedModel?: string
+    isFallback?: boolean
     totalTokens: number
     latencyMs: number
     statusCode: number
@@ -52,7 +54,14 @@ export function RecentRequests({ logs, isLoading }: RecentRequestsProps) {
             <div className="flex items-center gap-3">
               {statusIcon(log.status)}
               <div>
-                <p className="text-sm font-medium text-gray-900">{log.model}</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {log.servedModel || log.model}
+                  {log.isFallback && (
+                    <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                      fallback
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-gray-500">
                   {log.totalTokens} tokens · {log.latencyMs}ms
                 </p>
