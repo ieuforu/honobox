@@ -74,26 +74,34 @@ statsRoutes.get('/logs', async (c) => {
       LIMIT 50
     `)
 
-    return c.json(result.rows.map(row => ({
-      ...row,
-      status: row.statusCode < 400 ? 'success' : 'error',
-    })))
+    return c.json(
+      result.rows.map((row) => {
+        const statusCode = Number(row.statusCode)
+        return {
+          ...row,
+          statusCode,
+          status: statusCode < 400 ? 'success' : 'error',
+        }
+      }),
+    )
   } catch {
     // Fallback to in-memory store
     const logs = getRequestLogs(50)
-    return c.json(logs.map(log => ({
-      id: log.id,
-      requestId: log.requestId,
-      model: log.model,
-      latencyMs: log.latencyMs,
-      statusCode: log.statusCode,
-      promptTokens: log.promptTokens,
-      completionTokens: log.completionTokens,
-      totalTokens: log.promptTokens + log.completionTokens,
-      error: log.error,
-      timestamp: log.timestamp,
-      status: log.statusCode < 400 ? 'success' : 'error',
-    })))
+    return c.json(
+      logs.map((log) => ({
+        id: log.id,
+        requestId: log.requestId,
+        model: log.model,
+        latencyMs: log.latencyMs,
+        statusCode: log.statusCode,
+        promptTokens: log.promptTokens,
+        completionTokens: log.completionTokens,
+        totalTokens: log.promptTokens + log.completionTokens,
+        error: log.error,
+        timestamp: log.timestamp,
+        status: log.statusCode < 400 ? 'success' : 'error',
+      })),
+    )
   }
 })
 

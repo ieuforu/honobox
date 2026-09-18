@@ -1,13 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { addRequestLog, getRequestLogs, getStats, type RequestLogEntry } from '../request-store'
 
 describe('request-store', () => {
-  beforeEach(() => {
-    // Clear store by getting all logs and noting count
-    const logs = getRequestLogs(1000)
-    // We can't directly clear, but tests should be independent
-  })
-
   const createLog = (overrides?: Partial<RequestLogEntry>): RequestLogEntry => ({
     id: `id-${Date.now()}`,
     traceId: 'trace-123',

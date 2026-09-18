@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { apiKeys } from '../db/schema/index.js'
+import { hashApiKey } from '../lib/secrets.js'
 import type { Variables } from '../types/index.js'
 
 const apiKeyRoutes = new Hono<{ Variables: Variables }>()
@@ -12,10 +13,12 @@ const apiKeyRoutes = new Hono<{ Variables: Variables }>()
 apiKeyRoutes.get('/', async (c) => {
   try {
     const keys = await db.select().from(apiKeys)
-    return c.json(keys.map(k => ({
-      ...k,
-      key: k.key.slice(0, 10) + '...',
-    })))
+    return c.json(
+      keys.map(({ keyHash: _keyHash, keyPrefix, ...key }) => ({
+        ...key,
+        key: `${keyPrefix}...`,
+      })),
+    )
   } catch (err) {
     console.error('Failed to fetch API keys:', err)
     return c.json([])
@@ -36,15 +39,20 @@ apiKeyRoutes.post('/', async (c) => {
   }
 
   try {
+    const plainTextKey = `sk-${nanoid(32)}`
     const newKey = {
       name: parsed.data.name,
-      key: `sk-${nanoid(32)}`,
+      keyHash: hashApiKey(plainTextKey),
+      keyPrefix: plainTextKey.slice(0, 10),
       rateLimit: parsed.data.rateLimit,
       quota: parsed.data.quota,
     }
 
     const result = await db.insert(apiKeys).values(newKey).returning()
-    return c.json(result[0], 201)
+    const created = result[0]
+    if (!created) return c.json({ error: 'Failed to create API key' }, 500)
+    const { keyHash: _keyHash, keyPrefix: _keyPrefix, ...safeKey } = created
+    return c.json({ ...safeKey, key: plainTextKey }, 201)
   } catch (err) {
     console.error('Failed to create API key:', err)
     return c.json({ error: 'Failed to create API key' }, 500)

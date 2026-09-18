@@ -2,6 +2,7 @@ import type { MiddlewareHandler } from 'hono'
 import { eq } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { apiKeys } from '../db/schema/index.js'
+import { hashApiKey } from '../lib/secrets.js'
 
 export const authMiddleware: MiddlewareHandler = async (c, next) => {
   const authHeader = c.req.header('Authorization')
@@ -17,7 +18,7 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     const keys = await db
       .select()
       .from(apiKeys)
-      .where(eq(apiKeys.key, token))
+      .where(eq(apiKeys.keyHash, hashApiKey(token)))
       .limit(1)
 
     const key = keys[0]
@@ -31,13 +32,10 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     }
 
     // Update last used timestamp
-    await db
-      .update(apiKeys)
-      .set({ lastUsedAt: new Date() })
-      .where(eq(apiKeys.id, key.id))
+    await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, key.id))
 
     // Store key info in context
-    c.set('apiKey', key.key)
+    c.set('apiKey', key.keyHash)
     c.set('apiKeyId', key.id)
     c.set('rateLimit', key.rateLimit)
 

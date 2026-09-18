@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { StatsCards } from './StatsCards'
 import { UsageChart } from './UsageChart'
 import { RecentRequests } from './RecentRequests'
+import { apiFetch } from '../../lib/api'
 
 interface UsageStats {
   totalRequests: number
@@ -26,12 +27,12 @@ interface RequestLog {
 export function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useQuery<UsageStats>({
     queryKey: ['stats'],
-    queryFn: () => fetch('/api/stats').then(r => r.json()),
+    queryFn: () => apiFetch('/api/stats').then((r) => r.json()),
   })
 
   const { data: logs, isLoading: logsLoading } = useQuery<RequestLog[]>({
     queryKey: ['logs'],
-    queryFn: () => fetch('/api/stats/logs').then(r => r.json()),
+    queryFn: () => apiFetch('/api/stats/logs').then((r) => r.json()),
   })
 
   return (

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle, XCircle, Clock } from 'lucide-react'
+import { apiFetch } from '../../lib/api'
 
 interface RequestLog {
   id: string
@@ -18,7 +19,7 @@ interface RequestLog {
 export function LogsPage() {
   const { data: logs, isLoading } = useQuery<RequestLog[]>({
     queryKey: ['logs'],
-    queryFn: () => fetch('/api/stats/logs').then(r => r.json()),
+    queryFn: () => apiFetch('/api/stats/logs').then((r) => r.json()),
     refetchInterval: 3000,
   })
 
@@ -63,12 +64,8 @@ export function LogsPage() {
                 <tr key={log.id} className="border-b border-gray-50">
                   <td className="px-4 py-3">{statusIcon(log.status)}</td>
                   <td className="px-4 py-3 font-medium">{log.model}</td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {log.totalTokens}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {log.latencyMs}ms
-                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{log.totalTokens}</td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{log.latencyMs}ms</td>
                   <td className="px-4 py-3">
                     <code className="rounded bg-gray-100 px-2 py-0.5 text-xs">
                       {log.requestId?.slice(0, 12) ?? '-'}
@@ -77,9 +74,7 @@ export function LogsPage() {
                   <td className="px-4 py-3 text-sm text-gray-500">
                     {new Date(log.timestamp).toLocaleTimeString()}
                   </td>
-                  <td className="px-4 py-3 text-sm text-red-500">
-                    {log.error ?? '-'}
-                  </td>
+                  <td className="px-4 py-3 text-sm text-red-500">{log.error ?? '-'}</td>
                 </tr>
               ))}
             </tbody>

@@ -12,10 +12,22 @@ export const config = {
     database: process.env.DB_NAME || 'ai_gateway',
   },
   auth: {
-    jwtSecret: process.env.JWT_SECRET || 'dev-secret-do-not-use-in-prod',
+    adminToken: process.env.ADMIN_TOKEN || '',
+    modelEncryptionKey: process.env.MODEL_ENCRYPTION_KEY || 'dev-secret-do-not-use-in-prod',
   },
   dify: {
     baseUrl: process.env.DIFY_BASE_URL || 'http://localhost/v1',
     apiKey: process.env.DIFY_API_KEY || '',
   },
 } as const
+
+if (!config.isDev) {
+  const missingSecrets = [
+    !process.env.ADMIN_TOKEN && 'ADMIN_TOKEN',
+    !process.env.MODEL_ENCRYPTION_KEY && 'MODEL_ENCRYPTION_KEY',
+  ].filter((name): name is string => Boolean(name))
+
+  if (missingSecrets.length > 0) {
+    throw new Error(`Missing required production secrets: ${missingSecrets.join(', ')}`)
+  }
+}

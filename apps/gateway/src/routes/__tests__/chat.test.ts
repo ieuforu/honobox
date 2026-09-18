@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Hono } from 'hono'
 import { chatRoutes } from '../chat'
+import type { Variables } from '../../types/index.js'
 
 // Mock dependencies
 vi.mock('../../providers/index.js', () => ({
@@ -10,7 +11,9 @@ vi.mock('../../providers/index.js', () => ({
       object: 'chat.completion',
       created: Date.now(),
       model: 'test-model',
-      choices: [{ index: 0, message: { role: 'assistant', content: 'Hello' }, finish_reason: 'stop' }],
+      choices: [
+        { index: 0, message: { role: 'assistant', content: 'Hello' }, finish_reason: 'stop' },
+      ],
       usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
     }),
     chatCompletionStream: vi.fn().mockImplementation(async function* () {
@@ -29,9 +32,26 @@ vi.mock('../../middlewares/rate-limit.js', () => ({
   rateLimitMiddleware: async (_c: any, next: any) => await next(),
 }))
 
+vi.mock('../models.js', () => ({
+  getModelConfig: vi.fn().mockResolvedValue({
+    id: 'test-model',
+    name: 'Test Model',
+    provider: 'openai',
+    baseUrl: 'https://api.openai.com/v1',
+    apiKey: 'sk-test',
+    enabled: true,
+  }),
+}))
+
 vi.mock('../../lib/request-store.js', () => ({
   addRequestLog: vi.fn(),
-  getStats: vi.fn().mockReturnValue({ totalRequests: 0, totalTokens: 0, avgLatencyMs: 0, errorRate: 0, byModel: {} }),
+  getStats: vi.fn().mockReturnValue({
+    totalRequests: 0,
+    totalTokens: 0,
+    avgLatencyMs: 0,
+    errorRate: 0,
+    byModel: {},
+  }),
 }))
 
 vi.mock('../../lib/event-bus.js', () => ({
@@ -43,19 +63,24 @@ vi.mock('../../db/index.js', () => ({
     insert: () => ({ values: () => Promise.resolve() }),
     select: () => ({
       from: () => ({
-        where: () => ({
-          limit: () => Promise.resolve([{
-            id: '1',
-            name: 'Test Model',
-            provider: 'openai',
-            modelId: 'test-model',
-            baseUrl: 'https://api.openai.com/v1',
-            apiKey: 'sk-test',
-            maxTokens: null,
-            enabled: true,
-            createdAt: new Date(),
-          }]),
-        }),
+        where: () => {
+          const rows = [
+            {
+              id: '1',
+              name: 'Test Model',
+              provider: 'openai',
+              modelId: 'test-model',
+              baseUrl: 'https://api.openai.com/v1',
+              apiKeyEncrypted: 'encrypted',
+              maxTokens: null,
+              enabled: true,
+              createdAt: new Date(),
+            },
+          ]
+          return {
+            limit: () => Promise.resolve(rows),
+          }
+        },
       }),
     }),
   },
@@ -67,7 +92,7 @@ vi.mock('../../db/schema/index.js', () => ({
 }))
 
 describe('chat routes', () => {
-  const app = new Hono()
+  const app = new Hono<{ Variables: Variables }>()
   app.use('*', async (c, next) => {
     c.set('requestId', 'test-request-id')
     c.set('traceId', 'test-trace-id')

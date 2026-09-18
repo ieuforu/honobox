@@ -26,6 +26,7 @@ export class AnthropicProvider implements ModelProviderInterface {
         messages,
         stream: false,
       }),
+      signal: req.signal,
     })
 
     if (!response.ok) {
@@ -73,6 +74,7 @@ export class AnthropicProvider implements ModelProviderInterface {
         messages,
         stream: true,
       }),
+      signal: req.signal,
     })
 
     if (!response.ok) {
@@ -141,6 +143,9 @@ export class AnthropicProvider implements ModelProviderInterface {
         }
       }
     } finally {
+      if (req.signal?.aborted) {
+        await reader.cancel('downstream client disconnected').catch(() => undefined)
+      }
       reader.releaseLock()
     }
   }

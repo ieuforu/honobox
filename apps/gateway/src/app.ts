@@ -5,6 +5,8 @@ import { secureHeaders } from 'hono/secure-headers'
 import { timing } from 'hono/timing'
 import pinoLogger from './lib/logger.js'
 import { traceMiddleware } from './middlewares/trace.js'
+import { authMiddleware } from './middlewares/auth.js'
+import { adminAuthMiddleware } from './middlewares/admin-auth.js'
 import healthRoutes from './routes/health.js'
 import { chatRoutes } from './routes/chat.js'
 import { apiKeyRoutes } from './routes/api-keys.js'
@@ -33,12 +35,17 @@ app.use('*', async (c, next) => {
   )
 })
 
-// ============ 公开路由 ============
+// ============ Public routes ============
 app.route('/health', healthRoutes)
-app.route('/api/events', eventsRoutes)
 
-// ============ API 路由（需要认证） ============
+// ============ Data plane: gateway API keys ============
+app.use('/v1/chat/*', authMiddleware)
 app.route('/v1/chat', chatRoutes)
+
+// ============ Control plane: independent admin token ============
+app.use('/api/*', adminAuthMiddleware)
+app.get('/api/admin/verify', (c) => c.json({ ok: true }))
+app.route('/api/events', eventsRoutes)
 app.route('/api/api-keys', apiKeyRoutes)
 app.route('/api/models', modelRoutes)
 app.route('/api/stats', statsRoutes)

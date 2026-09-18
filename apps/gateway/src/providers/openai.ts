@@ -23,6 +23,7 @@ export class OpenAIProvider implements ModelProviderInterface {
         max_tokens: req.max_tokens,
         stream: false,
       }),
+      signal: req.signal,
     })
 
     if (!response.ok) {
@@ -47,6 +48,7 @@ export class OpenAIProvider implements ModelProviderInterface {
         max_tokens: req.max_tokens,
         stream: true,
       }),
+      signal: req.signal,
     })
 
     if (!response.ok) {
@@ -97,6 +99,9 @@ export class OpenAIProvider implements ModelProviderInterface {
         }
       }
     } finally {
+      if (req.signal?.aborted) {
+        await reader.cancel('downstream client disconnected').catch(() => undefined)
+      }
       reader.releaseLock()
     }
   }

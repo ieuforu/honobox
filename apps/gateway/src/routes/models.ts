@@ -6,6 +6,7 @@ import { models } from '../db/schema/index.js'
 import { createProvider } from '../providers/index.js'
 import type { ModelConfig, ModelProviderInterface } from '@ai-gateway/shared'
 import type { Variables } from '../types/index.js'
+import { decryptSecret, encryptSecret } from '../lib/secrets.js'
 
 const modelRoutes = new Hono<{ Variables: Variables }>()
 
@@ -13,10 +14,12 @@ const modelRoutes = new Hono<{ Variables: Variables }>()
 modelRoutes.get('/', async (c) => {
   try {
     const allModels = await db.select().from(models)
-    return c.json(allModels.map(m => ({
-      ...m,
-      apiKey: m.apiKey.slice(0, 10) + '...',
-    })))
+    return c.json(
+      allModels.map(({ apiKeyEncrypted: _secret, ...model }) => ({
+        ...model,
+        apiKey: '••••••••',
+      })),
+    )
   } catch (err) {
     console.error('Failed to fetch models:', err)
     return c.json([])
@@ -40,8 +43,15 @@ modelRoutes.post('/', async (c) => {
   }
 
   try {
-    const result = await db.insert(models).values(parsed.data).returning()
-    return c.json(result[0], 201)
+    const { apiKey, ...model } = parsed.data
+    const result = await db
+      .insert(models)
+      .values({ ...model, apiKeyEncrypted: encryptSecret(apiKey) })
+      .returning()
+    const created = result[0]
+    if (!created) return c.json({ error: 'Failed to create model' }, 500)
+    const { apiKeyEncrypted: _secret, ...safeModel } = created
+    return c.json({ ...safeModel, apiKey: '••••••••' }, 201)
   } catch (err) {
     console.error('Failed to create model:', err)
     return c.json({ error: 'Failed to create model' }, 500)
@@ -85,7 +95,17 @@ modelRoutes.post('/:id/toggle', async (c) => {
 // Helper: Get model config for provider
 export async function getModelConfig(modelId: string): Promise<ModelConfig | null> {
   const result = await db.select().from(models).where(eq(models.modelId, modelId)).limit(1)
-  return result[0] ?? null
+  const model = result[0]
+  if (!model) return null
+  return {
+    id: model.modelId,
+    name: model.name,
+    provider: model.provider as ModelConfig['provider'],
+    baseUrl: model.baseUrl,
+    apiKey: decryptSecret(model.apiKeyEncrypted),
+    maxTokens: model.maxTokens ?? undefined,
+    enabled: model.enabled,
+  }
 }
 
 // Helper: Get provider for model
@@ -93,15 +113,7 @@ export async function getProviderForModel(modelId: string): Promise<ModelProvide
   const config = await getModelConfig(modelId)
   if (!config || !config.enabled) return null
 
-  return createProvider({
-    id: config.modelId,
-    name: config.name,
-    provider: config.provider as any,
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    maxTokens: config.maxTokens ?? undefined,
-    enabled: config.enabled,
-  })
+  return createProvider(config)
 }
 
 export { modelRoutes }

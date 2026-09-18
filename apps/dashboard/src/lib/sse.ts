@@ -1,9 +1,11 @@
+import { getAdminToken } from './api'
+
 // SSE client for real-time updates - singleton
 
 type EventHandler = (data: any) => void
 
 class SSEClient {
-  private eventSource: EventSource | null = null
+  private abortController: AbortController | null = null
   private handlers = new Map<string, Set<EventHandler>>()
   private connected = false
 
@@ -11,31 +13,54 @@ class SSEClient {
     if (this.connected) return
     this.connected = true
 
-    this.eventSource = new EventSource('/api/events')
+    this.abortController = new AbortController()
+    void this.consume(this.abortController.signal)
+  }
 
-    this.eventSource.onopen = () => {
-      console.log('SSE connected')
-    }
-
-    this.eventSource.onerror = () => {
-      console.log('SSE disconnected')
-      this.connected = false
-      // Auto reconnect after 3s
-      setTimeout(() => this.connect(), 3000)
-    }
-
-    // Listen for named events
-    const eventTypes = ['stats:update', 'request:end']
-    eventTypes.forEach(type => {
-      this.eventSource!.addEventListener(type, (event) => {
-        try {
-          const data = JSON.parse((event as MessageEvent).data)
-          this.handlers.get(type)?.forEach(handler => handler(data))
-        } catch (err) {
-          console.error('Failed to parse SSE data:', err)
-        }
+  private async consume(signal: AbortSignal) {
+    try {
+      const token = getAdminToken()
+      const response = await fetch('/api/events', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal,
       })
-    })
+      if (!response.ok || !response.body) throw new Error(`SSE failed (${response.status})`)
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (!signal.aborted) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const messages = buffer.split('\n\n')
+        buffer = messages.pop() ?? ''
+        for (const message of messages) this.dispatch(message)
+      }
+    } catch (error) {
+      if (!signal.aborted) console.error('SSE disconnected:', error)
+    } finally {
+      if (!signal.aborted) {
+        this.connected = false
+        setTimeout(() => this.connect(), 3000)
+      }
+    }
+  }
+
+  private dispatch(message: string) {
+    let eventType = 'message'
+    const data: string[] = []
+    for (const line of message.split('\n')) {
+      if (line.startsWith('event:')) eventType = line.slice(6).trim()
+      if (line.startsWith('data:')) data.push(line.slice(5).trimStart())
+    }
+    if (data.length === 0 || !this.handlers.has(eventType)) return
+    try {
+      const payload = JSON.parse(data.join('\n'))
+      this.handlers.get(eventType)?.forEach((handler) => handler(payload))
+    } catch (error) {
+      console.error('Failed to parse SSE data:', error)
+    }
   }
 
   on(event: string, handler: EventHandler): () => void {
@@ -47,8 +72,8 @@ class SSEClient {
   }
 
   disconnect() {
-    this.eventSource?.close()
-    this.eventSource = null
+    this.abortController?.abort()
+    this.abortController = null
     this.connected = false
   }
 }

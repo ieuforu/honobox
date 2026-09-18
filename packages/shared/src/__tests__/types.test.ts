@@ -1,13 +1,5 @@
 import { describe, it, expectTypeOf } from 'vitest'
-import type {
-  ModelConfig,
-  ChatMessage,
-  ChatCompletionRequest,
-  ChatCompletionResponse,
-  ApiKey,
-  UsageStats,
-  RequestLog,
-} from '../index'
+import type { ModelConfig, ChatCompletionRequest, UsageStats } from '../index'
 
 describe('shared types', () => {
   it('ModelConfig should have required fields', () => {

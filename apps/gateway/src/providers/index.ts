@@ -51,14 +51,14 @@ export const defaultModels: ModelConfig[] = [
 ]
 
 // Model registry
-const models = new Map<string, ModelConfig>(defaultModels.map(m => [m.id, m]))
+const models = new Map<string, ModelConfig>(defaultModels.map((m) => [m.id, m]))
 
 export function getModel(modelId: string): ModelConfig | undefined {
   return models.get(modelId)
 }
 
 export function getEnabledModels(): ModelConfig[] {
-  return Array.from(models.values()).filter(m => m.enabled)
+  return Array.from(models.values()).filter((m) => m.enabled)
 }
 
 export function addModel(config: ModelConfig): void {

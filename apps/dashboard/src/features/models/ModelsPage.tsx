@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, ToggleLeft, ToggleRight, Cpu, CheckCircle, XCircle } from 'lucide-react'
+import { Plus, Trash2, ToggleLeft, ToggleRight, Cpu } from 'lucide-react'
+import { apiFetch } from '../../lib/api'
 
 interface Model {
   id: string
@@ -19,28 +19,27 @@ export function ModelsPage() {
 
   const { data: models, isLoading } = useQuery<Model[]>({
     queryKey: ['models'],
-    queryFn: () => fetch('/api/models').then(r => r.json()),
+    queryFn: () => apiFetch('/api/models').then((r) => r.json()),
   })
 
   const createMutation = useMutation({
     mutationFn: (data: Omit<Model, 'id' | 'createdAt'>) =>
-      fetch('/api/models', {
+      apiFetch('/api/models', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then(r => r.json()),
+      }).then((r) => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/models/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiFetch(`/api/models/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   })
 
   const toggleMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/models/${id}/toggle`, { method: 'POST' }).then(r => r.json()),
+      apiFetch(`/api/models/${id}/toggle`, { method: 'POST' }).then((r) => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   })
 
@@ -56,7 +55,15 @@ export function ModelsPage() {
     const apiKey = prompt('API Key:')
     if (!apiKey) return
 
-    createMutation.mutate({ name, provider, modelId, baseUrl, apiKey, maxTokens: null, enabled: true })
+    createMutation.mutate({
+      name,
+      provider,
+      modelId,
+      baseUrl,
+      apiKey,
+      maxTokens: null,
+      enabled: true,
+    })
   }
 
   const providerColors: Record<string, string> = {
@@ -126,9 +133,7 @@ export function ModelsPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        model.enabled
-                          ? 'bg-green-50 text-green-700'
-                          : 'bg-gray-100 text-gray-500'
+                        model.enabled ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
                       }`}
                     >
                       {model.enabled ? '启用' : '禁用'}

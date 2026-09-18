@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, boolean, integer, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, boolean, integer, text, timestamp } from 'drizzle-orm/pg-core'
 
 export const models = pgTable('models', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -6,7 +6,7 @@ export const models = pgTable('models', {
   provider: varchar('provider', { length: 50 }).notNull(), // openai, anthropic, deepseek
   modelId: varchar('model_id', { length: 100 }).notNull().unique(), // e.g. gpt-4o
   baseUrl: varchar('base_url', { length: 256 }).notNull(),
-  apiKey: varchar('api_key', { length: 256 }).notNull(),
+  apiKeyEncrypted: text('api_key_encrypted').notNull(),
   maxTokens: integer('max_tokens'),
   enabled: boolean('enabled').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),

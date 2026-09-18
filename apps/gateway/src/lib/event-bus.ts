@@ -14,7 +14,7 @@ class EventBus {
   }
 
   emit(event: string, data: any): void {
-    this.handlers.get(event)?.forEach(handler => handler(data))
+    this.handlers.get(event)?.forEach((handler) => handler(data))
   }
 }
 

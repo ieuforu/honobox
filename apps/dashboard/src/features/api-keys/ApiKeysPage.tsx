@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, ToggleLeft, ToggleRight, Copy, Check } from 'lucide-react'
+import { apiFetch } from '../../lib/api'
 
 interface ApiKey {
   id: string
@@ -16,31 +17,34 @@ interface ApiKey {
 export function ApiKeysPage() {
   const queryClient = useQueryClient()
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [createdKey, setCreatedKey] = useState<string | null>(null)
 
   const { data: keys, isLoading } = useQuery<ApiKey[]>({
     queryKey: ['api-keys'],
-    queryFn: () => fetch('/api/api-keys').then(r => r.json()),
+    queryFn: () => apiFetch('/api/api-keys').then((r) => r.json()),
   })
 
   const createMutation = useMutation({
     mutationFn: (name: string) =>
-      fetch('/api/api-keys', {
+      apiFetch('/api/api-keys', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
-      }).then(r => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+      }).then((r) => r.json()),
+    onSuccess: (created: ApiKey) => {
+      setCreatedKey(created.key)
+      queryClient.invalidateQueries({ queryKey: ['api-keys'] })
+    },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      fetch(`/api/api-keys/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => apiFetch(`/api/api-keys/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   })
 
   const toggleMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/api-keys/${id}/toggle`, { method: 'POST' }).then(r => r.json()),
+      apiFetch(`/api/api-keys/${id}/toggle`, { method: 'POST' }).then((r) => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   })
 
@@ -71,6 +75,26 @@ export function ApiKeysPage() {
         </button>
       </div>
 
+      {createdKey && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-medium text-amber-950">新 Key 只显示这一次，请立即保存。</p>
+          <div className="mt-3 flex items-center gap-3">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-white px-3 py-2 text-sm text-amber-950">
+              {createdKey}
+            </code>
+            <button
+              onClick={() => handleCopy('created', createdKey)}
+              className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-900"
+            >
+              {copiedId === 'created' ? '已复制' : '复制'}
+            </button>
+            <button onClick={() => setCreatedKey(null)} className="text-sm text-amber-800">
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl border border-gray-200 bg-white">
         {isLoading ? (
           <div className="p-8 text-center text-gray-400">加载中...</div>
@@ -94,9 +118,7 @@ export function ApiKeysPage() {
                   <td className="px-4 py-3 font-medium">{key.name}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <code className="rounded bg-gray-100 px-2 py-1 text-xs">
-                        {key.key}
-                      </code>
+                      <code className="rounded bg-gray-100 px-2 py-1 text-xs">{key.key}</code>
                       <button
                         onClick={() => handleCopy(key.id, key.key)}
                         className="text-gray-400 hover:text-gray-600"
@@ -112,17 +134,13 @@ export function ApiKeysPage() {
                   <td className="px-4 py-3">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        key.enabled
-                          ? 'bg-green-50 text-green-700'
-                          : 'bg-gray-100 text-gray-500'
+                        key.enabled ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'
                       }`}
                     >
                       {key.enabled ? '启用' : '禁用'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
-                    {key.rateLimit}/min
-                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{key.rateLimit}/min</td>
                   <td className="px-4 py-3 text-sm text-gray-500">
                     {new Date(key.createdAt).toLocaleDateString()}
                   </td>

@@ -1,200 +1,131 @@
-# HonoBox - AI Gateway
+# HonoBox
 
-Open-source LLM Gateway with real-time monitoring dashboard.
+An authenticated, OpenAI-compatible LLM gateway with streaming proxying, encrypted provider credentials, per-key rate limits, and a real-time React control plane.
+
+![CI](https://github.com/ieuforu/honobox/actions/workflows/ci.yml/badge.svg)
+
+## Why HonoBox
+
+HonoBox focuses on the parts of an LLM gateway that are easy to get subtly wrong:
+
+- **Streaming lifecycle** — downstream disconnects propagate through `AbortSignal` and cancel the upstream request.
+- **Separated access paths** — gateway API keys protect inference traffic; an independent admin token protects the control plane.
+- **Secret handling** — gateway keys are stored as SHA-256 hashes and provider keys are encrypted with AES-256-GCM.
+- **Request visibility** — trace IDs, latency, token usage, errors, and live SSE updates are available in the dashboard.
+- **Provider adapters** — OpenAI-compatible providers, Anthropic, and DeepSeek share one request contract.
+
+## Architecture
+
+```text
+Application                       React control plane
+    │ Bearer sk-...                     │ Bearer ADMIN_TOKEN
+    ▼                                   ▼
+┌──────────────────────────────────────────────────────────┐
+│                     Hono gateway                         │
+│ auth → rate limit → provider adapter → stream lifecycle │
+└───────────────────┬───────────────────────┬──────────────┘
+                    │                       │
+              LLM providers           PostgreSQL
+                                      configs + traces
+```
 
 ## Preview
 
 ![Dashboard](preview/截屏2026-09-01%2015.58.09.png)
 
-![API Management](preview/截屏2026-09-01%2016.03.37.png)
+![Request logs](preview/截屏2026-09-01%2016.03.37.png)
 
-## Features
+## Stack
 
-- **Multi-model routing** — OpenAI-compatible API, supports any provider (OpenAI, Anthropic, DeepSeek, local models)
-- **Real-time monitoring** — SSE-based live dashboard updates
-- **API Key management** — Database-backed keys with per-key rate limiting
-- **Model management** — CRUD models via API or dashboard
-- **Request tracing** — Full trace ID across all logs
-- **PostgreSQL persistence** — Request logs, API keys, and models
+| Layer         | Technology                                            |
+| ------------- | ----------------------------------------------------- |
+| Gateway       | Hono, Node.js, TypeScript                             |
+| Control plane | React 19, TanStack Query, Recharts                    |
+| Persistence   | PostgreSQL, Drizzle ORM                               |
+| Streaming     | Web Streams, SSE, AbortSignal                         |
+| Quality       | Vitest, TypeScript project references, GitHub Actions |
 
-## Tech Stack
+## Run locally
 
-| Layer | Tech |
-|-------|------|
-| Runtime | Node.js + TypeScript (strict) |
-| Backend | Hono + Drizzle ORM + PostgreSQL |
-| Frontend | React 19 + TanStack Query + Recharts |
-| Real-time | Server-Sent Events (SSE) |
-| Testing | Vitest (20 tests) |
-| Monorepo | pnpm workspace |
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js >= 20
-- pnpm >= 9
-- PostgreSQL (or Docker)
-
-### 1. Start PostgreSQL
+Requirements: Node.js 22+, pnpm, and Docker.
 
 ```bash
-# Option A: Docker (recommended)
-docker run -d --name ai-gateway-db \
-  -p 5432:5432 \
-  -e POSTGRES_DB=ai_gateway \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  postgres:16-alpine
-
-# Option B: Use your local PostgreSQL
-# Create database: ai_gateway
-```
-
-### 2. Install & Configure
-
-```bash
-# Install dependencies
 pnpm install
-
-# Configure environment
 cp apps/gateway/.env.example apps/gateway/.env
-# Edit apps/gateway/.env with your database credentials
-```
 
-### 3. Initialize Database
-
-```bash
-cd apps/gateway
-npx drizzle-kit push
-```
-
-### 4. Start Development
-
-```bash
+# Edit ADMIN_TOKEN and MODEL_ENCRYPTION_KEY first.
+pnpm db:up
+pnpm db:push
 pnpm dev
-
-# Gateway: http://localhost:3000
-# Dashboard: http://localhost:5173
 ```
 
-### 5. Add a Model
+- Dashboard: <http://localhost:5173>
+- Gateway: <http://localhost:3000>
+- Health check: <http://localhost:3000/health>
+
+The dashboard asks for `ADMIN_TOKEN` on first load and keeps it only in the current browser tab.
+
+## Configure a model and gateway key
+
+Use the dashboard, or call the control-plane API with the admin token:
 
 ```bash
-# Via Dashboard: http://localhost:5173 -> Models -> Add Model
-
-# Or via API:
 curl -X POST http://localhost:3000/api/models \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "GPT-4o",
     "provider": "openai",
     "modelId": "gpt-4o",
     "baseUrl": "https://api.openai.com/v1",
-    "apiKey": "sk-your-key"
+    "apiKey": "your-provider-key"
   }'
-```
 
-### 6. Create API Key
-
-```bash
-# Via Dashboard: http://localhost:5173 -> API Keys -> Create Key
-
-# Or via API:
 curl -X POST http://localhost:3000/api/api-keys \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "My App"}'
+  -d '{"name":"local-app","rateLimit":100}'
 ```
 
-## API Usage
+The generated gateway key is returned once. Only its hash and display prefix are persisted.
+
+## OpenAI-compatible usage
 
 ```bash
-# List models
-curl http://localhost:3000/v1/chat/models
-
-# Chat completion
-curl -X POST http://localhost:3000/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-api-key" \
+curl -N http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer sk-your-gateway-key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}]
-  }'
-
-# Chat completion (streaming)
-curl -X POST http://localhost:3000/v1/chat/completions \
-  -H "Authorization: Bearer sk-your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4o",
-    "messages": [{"role": "user", "content": "Hello!"}],
+    "messages": [{"role":"user","content":"Hello"}],
     "stream": true
   }'
-
-# Health check
-curl http://localhost:3000/health
 ```
 
-## Testing
+Available models are exposed at `GET /v1/chat/models` and require the same gateway key.
+
+## Verify
 
 ```bash
-pnpm test
+pnpm check
 ```
 
-```
- ✓ apps/gateway/src/lib/__tests__/request-store.test.ts (7 tests)
- ✓ apps/gateway/src/providers/__tests__/index.test.ts (5 tests)
- ✓ apps/gateway/src/routes/__tests__/health.test.ts (1 test)
- ✓ apps/gateway/src/routes/__tests__/chat.test.ts (3 tests)
- ✓ packages/shared/src/__tests__/types.test.ts (3 tests)
+This runs linting, type checking, tests, and production builds for every workspace package. The same command runs in GitHub Actions.
 
- Test Files  5 passed (5)
-      Tests  20 passed (20)
-```
+## Security model
 
-## Project Structure
+- `ADMIN_TOKEN` is for control-plane operations and must not be used as an inference key.
+- Gateway API keys are shown once and compared by hash.
+- Provider credentials are encrypted at rest with `MODEL_ENCRYPTION_KEY`.
+- Deploy behind HTTPS and rotate both admin and encryption secrets through your platform's secret manager.
+- HonoBox is currently a single-node gateway; distributed quotas and multi-node coordination remain roadmap items.
 
-```
-honobox/
-├── apps/
-│   ├── gateway/          # Hono API server
-│   │   ├── src/
-│   │   │   ├── providers/    # Model provider abstraction
-│   │   │   ├── routes/       # API routes
-│   │   │   ├── middlewares/  # Auth, rate-limit, trace
-│   │   │   ├── db/           # Drizzle schema & connection
-│   │   │   └── lib/          # Logger, event-bus, request-store
-│   │   └── drizzle.config.ts
-│   │
-│   └── dashboard/        # React frontend
-│       └── src/
-│           ├── features/     # Dashboard, API Keys, Models, Logs
-│           ├── components/   # Layout, UI components
-│           └── lib/          # SSE client
-│
-├── packages/
-│   └── shared/           # Shared TypeScript types
-│       └── src/
-│
-├── pnpm-workspace.yaml
-└── package.json
-```
+## Roadmap
 
-## Environment Variables
-
-```bash
-# apps/gateway/.env
-
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_NAME=ai_gateway
-
-# Server
-PORT=3000
-```
+- Weighted provider routing and health-aware failover
+- Circuit breaking and retry-before-first-token semantics
+- OpenTelemetry and Prometheus export
+- Reproducible fault-injection and load-test scenarios
 
 ## License
 

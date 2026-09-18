@@ -29,14 +29,16 @@ export function getRequestLogs(limit = 50): RequestLogEntry[] {
 
 export function getStats() {
   const total = requestLogs.length
-  const success = requestLogs.filter(r => r.statusCode < 400)
+  const success = requestLogs.filter((r) => r.statusCode < 400)
   const totalTokens = requestLogs.reduce((sum, r) => sum + r.promptTokens + r.completionTokens, 0)
-  const avgLatency = success.length > 0
-    ? Math.round(success.reduce((sum, r) => sum + r.latencyMs, 0) / success.length)
-    : 0
-  const errorRate = total > 0
-    ? Math.round((requestLogs.filter(r => r.statusCode >= 400).length / total) * 100) / 100
-    : 0
+  const avgLatency =
+    success.length > 0
+      ? Math.round(success.reduce((sum, r) => sum + r.latencyMs, 0) / success.length)
+      : 0
+  const errorRate =
+    total > 0
+      ? Math.round((requestLogs.filter((r) => r.statusCode >= 400).length / total) * 100) / 100
+      : 0
 
   const byModel: Record<string, { requests: number; tokens: number }> = {}
   for (const log of requestLogs) {

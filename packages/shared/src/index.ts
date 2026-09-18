@@ -22,6 +22,8 @@ export interface ChatCompletionRequest {
   stream?: boolean
   temperature?: number
   max_tokens?: number
+  /** Cancels the upstream provider request when the client disconnects. */
+  signal?: AbortSignal
 }
 
 export interface ChatCompletionChunk {

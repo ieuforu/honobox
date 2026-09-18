@@ -25,7 +25,7 @@ describe('providers', () => {
   describe('getEnabledModels', () => {
     it('should return only enabled models', () => {
       const models = getEnabledModels()
-      models.forEach(m => {
+      models.forEach((m) => {
         expect(m.enabled).toBe(true)
       })
     })
