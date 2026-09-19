@@ -1,0 +1,16 @@
+flowchart LR
+  client[Application] -->|Bearer gateway key| auth[Data-plane auth]
+  admin[React control plane] -->|Bearer admin token| adminAuth[Control-plane auth]
+  auth --> rate[PostgreSQL rate limit]
+  rate --> breaker[Per-model circuit breaker]
+  breaker --> primary[Primary provider]
+  breaker -. retry before first token .-> backup[Fallback provider]
+  primary --> stream[Streaming lifecycle]
+  backup --> stream
+  stream -->|SSE / JSON| client
+  adminAuth --> models[Model and key configuration]
+  adminAuth --> metrics[Prometheus metrics]
+  adminAuth --> events[Live request events]
+  models --> postgres[(PostgreSQL)]
+  rate --> postgres
+  stream --> postgres

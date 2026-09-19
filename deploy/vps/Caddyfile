@@ -1,0 +1,21 @@
+honobox.example.com {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3100
+	}
+
+	handle /v1/* {
+		reverse_proxy 127.0.0.1:3100
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:3100
+	}
+
+	handle {
+		root * /srv/honobox/current/apps/dashboard/dist
+		try_files {path} /index.html
+		file_server
+	}
+}

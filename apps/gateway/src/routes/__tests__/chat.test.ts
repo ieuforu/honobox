@@ -1,6 +1,6 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { Hono } from 'hono'
-import { chatRoutes } from '../chat'
+import { chatRoutes } from '../chat.js'
 import type { Variables } from '../../types/index.js'
 import { ProviderRequestError } from '../../providers/errors.js'
 

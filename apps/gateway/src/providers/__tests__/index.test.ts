@@ -6,7 +6,7 @@ import {
   removeModel,
   createProvider,
   type ModelConfig,
-} from '../index'
+} from '../index.js'
 
 describe('providers', () => {
   describe('getModel', () => {

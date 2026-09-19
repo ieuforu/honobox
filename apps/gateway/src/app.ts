@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
 import { timing } from 'hono/timing'
 import pinoLogger from './lib/logger.js'
+import { config } from './config/index.js'
 import { traceMiddleware } from './middlewares/trace.js'
 import { authMiddleware } from './middlewares/auth.js'
 import { adminAuthMiddleware } from './middlewares/admin-auth.js'
@@ -13,6 +14,7 @@ import { apiKeyRoutes } from './routes/api-keys.js'
 import { statsRoutes } from './routes/stats.js'
 import { eventsRoutes } from './routes/events.js'
 import { modelRoutes } from './routes/models.js'
+import metricsRoutes from './routes/metrics.js'
 import type { Variables } from './types/index.js'
 
 const app = new Hono<{ Variables: Variables }>()
@@ -37,6 +39,7 @@ app.use('*', async (c, next) => {
 
 // ============ Public routes ============
 app.route('/health', healthRoutes)
+app.get('/api/demo/status', (c) => c.json({ enabled: config.auth.demoMode }))
 
 // ============ Data plane: gateway API keys ============
 app.use('/v1/chat/*', authMiddleware)
@@ -49,6 +52,7 @@ app.route('/api/events', eventsRoutes)
 app.route('/api/api-keys', apiKeyRoutes)
 app.route('/api/models', modelRoutes)
 app.route('/api/stats', statsRoutes)
+app.route('/api/metrics', metricsRoutes)
 
 // ============ 全局错误处理 ============
 app.onError((err, c) => {

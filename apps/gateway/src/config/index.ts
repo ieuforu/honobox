@@ -14,6 +14,7 @@ export const config = {
   auth: {
     adminToken: process.env.ADMIN_TOKEN || '',
     modelEncryptionKey: process.env.MODEL_ENCRYPTION_KEY || 'dev-secret-do-not-use-in-prod',
+    demoMode: process.env.DEMO_MODE === 'true',
   },
   dify: {
     baseUrl: process.env.DIFY_BASE_URL || 'http://localhost/v1',

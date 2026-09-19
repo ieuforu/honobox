@@ -22,10 +22,12 @@
     "lint": "pnpm --parallel -r lint",
     "fmt": "pnpm --parallel -r fmt",
     "test": "pnpm --parallel -r test",
-    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm --filter @ai-gateway/gateway smoke",
     "db:up": "docker compose up -d --wait postgres",
     "db:down": "docker compose down",
     "db:push": "pnpm --filter @ai-gateway/gateway db:push",
+    "lab:fault": "node scripts/fault-lab.mjs",
+    "demo:seed": "node apps/gateway/scripts/seed-demo.mjs",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
   "devDependencies": {
@@ -35,5 +37,6 @@
     "oxlint": "^1.69.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
-  }
+  },
+  "packageManager": "pnpm@11.20.0"
 }

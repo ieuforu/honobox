@@ -1,4 +1,4 @@
-import baseLogger from './logger'
+import baseLogger from './logger.js'
 
 export interface LLMRequestLog {
   traceId: string

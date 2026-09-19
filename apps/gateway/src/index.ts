@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server'
-import { config } from './config'
-import app from './app'
+import { config } from './config/index.js'
+import app from './app.js'
 
 const mode = config.isDev ? 'development' : 'production'
 const lines = [

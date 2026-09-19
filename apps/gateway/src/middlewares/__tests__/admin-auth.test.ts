@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Hono } from 'hono'
 
 vi.mock('../../config/index.js', () => ({
-  config: { auth: { adminToken: 'admin-secret' } },
+  config: { auth: { adminToken: 'admin-secret', demoMode: true } },
 }))
 
 import { adminAuthMiddleware } from '../admin-auth.js'
@@ -30,5 +30,20 @@ describe('adminAuthMiddleware', () => {
       headers: { Authorization: 'Bearer admin-secret' },
     })
     expect(response.status).toBe(200)
+  })
+
+  it('accepts read-only demo requests', async () => {
+    const response = await app.request('/', {
+      headers: { Authorization: 'Bearer demo' },
+    })
+    expect(response.status).toBe(200)
+  })
+
+  it('blocks mutations made with the public demo token', async () => {
+    const response = await app.request('/', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer demo' },
+    })
+    expect(response.status).toBe(403)
   })
 })

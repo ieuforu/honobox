@@ -15,6 +15,16 @@ export const adminAuthMiddleware: MiddlewareHandler = async (c, next) => {
 
   const header = c.req.header('Authorization')
   const token = header?.startsWith('Bearer ') ? header.slice(7) : ''
+  const isReadOnlyDemo = config.auth.demoMode && token === 'demo'
+
+  if (isReadOnlyDemo) {
+    if (!['GET', 'HEAD'].includes(c.req.method)) {
+      return c.json({ error: 'The public demo is read-only' }, 403)
+    }
+    await next()
+    return
+  }
+
   if (!token || !equalSecret(token, config.auth.adminToken)) {
     return c.json({ error: 'Invalid admin token' }, 401)
   }

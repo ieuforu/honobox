@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { Hono } from 'hono'
-import healthRoutes from '../health'
+import healthRoutes from '../health.js'
 
 // Mock database
 vi.mock('../../db/index.js', () => ({

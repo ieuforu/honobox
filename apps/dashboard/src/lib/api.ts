@@ -12,6 +12,13 @@ export function clearAdminToken(): void {
   sessionStorage.removeItem(TOKEN_KEY)
 }
 
+export async function isDemoModeEnabled(): Promise<boolean> {
+  const response = await fetch('/api/demo/status')
+  if (!response.ok) return false
+  const body = (await response.json()) as { enabled?: boolean }
+  return body.enabled === true
+}
+
 export async function verifyAdminToken(token: string): Promise<boolean> {
   const response = await fetch('/api/admin/verify', {
     headers: { Authorization: `Bearer ${token}` },

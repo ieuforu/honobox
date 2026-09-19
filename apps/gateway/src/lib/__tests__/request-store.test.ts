@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { addRequestLog, getRequestLogs, getStats, type RequestLogEntry } from '../request-store'
+import { addRequestLog, getRequestLogs, getStats, type RequestLogEntry } from '../request-store.js'
 
 describe('request-store', () => {
   const createLog = (overrides?: Partial<RequestLogEntry>): RequestLogEntry => ({

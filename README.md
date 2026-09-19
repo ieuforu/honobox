@@ -4,6 +4,8 @@ An authenticated, OpenAI-compatible LLM gateway with streaming proxying, encrypt
 
 ![CI](https://github.com/ieuforu/honobox/actions/workflows/ci.yml/badge.svg)
 
+**Live demo:** [honobox.selena.ink](https://honobox.selena.ink) — choose the read-only demo to explore synthetic traffic, failover metrics, models, and request logs without a token.
+
 ## Why HonoBox
 
 HonoBox focuses on the parts of an LLM gateway that are easy to get subtly wrong:
@@ -13,9 +15,14 @@ HonoBox focuses on the parts of an LLM gateway that are easy to get subtly wrong
 - **Separated access paths** — gateway API keys protect inference traffic; an independent admin token protects the control plane.
 - **Secret handling** — gateway keys are stored as SHA-256 hashes and provider keys are encrypted with AES-256-GCM.
 - **Request visibility** — trace IDs, latency, token usage, errors, and live SSE updates are available in the dashboard.
+- **Metrics** — authenticated Prometheus counters and latency histograms expose served models, fallback traffic, status codes, and upstream failures.
 - **Provider adapters** — OpenAI-compatible providers, Anthropic, and DeepSeek share one request contract.
 
 ## Architecture
+
+See the [architecture and failure-path diagrams](docs/architecture.md) for the complete request lifecycle.
+
+![HonoBox system architecture](docs/assets/architecture.svg)
 
 ```text
 Application                       React control plane
@@ -116,6 +123,18 @@ pnpm check
 
 This runs linting, type checking, tests, and production builds for every workspace package. The same command runs in GitHub Actions.
 
+The check also imports the compiled Node.js application and sends a smoke request, catching ESM resolution errors that type checking alone cannot detect.
+
+## Fault-injection lab
+
+```bash
+docker compose up -d --wait postgres
+pnpm --filter @ai-gateway/gateway build
+pnpm lab:fault
+```
+
+The deterministic lab injects primary-provider HTTP 503 responses, verifies non-streaming and streaming failover, checks Prometheus output, and reports P50/P95 latency. See the [latest measured report](docs/benchmarks/fault-injection-2026-09-18.md).
+
 ## Security model
 
 - `ADMIN_TOKEN` is for control-plane operations and must not be used as an inference key.
@@ -128,8 +147,8 @@ This runs linting, type checking, tests, and production builds for every workspa
 
 - Weighted provider routing and health-aware failover
 - Distributed circuit-breaker state for multi-node deployments
-- OpenTelemetry and Prometheus export
-- Reproducible fault-injection and load-test scenarios
+- OpenTelemetry traces and multi-process metric aggregation
+- Longer-running public-cloud soak tests
 
 ## License
 

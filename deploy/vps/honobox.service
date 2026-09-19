@@ -1,0 +1,19 @@
+[Unit]
+Description=HonoBox LLM Gateway
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=honobox
+Group=honobox
+WorkingDirectory=/srv/honobox/current
+EnvironmentFile=/etc/honobox.env
+ExecStart=/usr/local/bin/node apps/gateway/dist/index.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

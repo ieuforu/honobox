@@ -13,6 +13,7 @@ import { rateLimitMiddleware } from '../middlewares/rate-limit.js'
 import type { Variables } from '../types/index.js'
 import { getModelConfig } from './models.js'
 import { modelCircuitBreaker } from '../lib/circuit-breaker.js'
+import { recordGatewayRequest, recordUpstreamFailure } from '../lib/metrics.js'
 import type { ModelConfig } from '@ai-gateway/shared'
 
 const chatBodySchema = z.object({
@@ -101,6 +102,8 @@ chatRoutes.post('/completions', async (c) => {
     if (finalized) return
     finalized = true
     const latencyMs = Math.round(performance.now() - start)
+
+    recordGatewayRequest({ servedModel, statusCode, isFallback, latencyMs })
 
     addRequestLog({
       id: requestId,
@@ -241,7 +244,10 @@ chatRoutes.post('/completions', async (c) => {
               break
             } catch (err) {
               lastError = err
-              if (isRetryableProviderError(err)) modelCircuitBreaker.recordFailure(config.id)
+              if (isRetryableProviderError(err)) {
+                modelCircuitBreaker.recordFailure(config.id)
+                recordUpstreamFailure(config.id, 'retryable')
+              }
               if (
                 isAbortError(err) ||
                 emittedChunk ||
@@ -304,7 +310,10 @@ chatRoutes.post('/completions', async (c) => {
         break
       } catch (err) {
         lastError = err
-        if (isRetryableProviderError(err)) modelCircuitBreaker.recordFailure(config.id)
+        if (isRetryableProviderError(err)) {
+          modelCircuitBreaker.recordFailure(config.id)
+          recordUpstreamFailure(config.id, 'retryable')
+        }
         if (isAbortError(err) || !hasFallback || !isRetryableProviderError(err)) throw err
       }
     }

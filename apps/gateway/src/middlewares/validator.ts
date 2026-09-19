@@ -1,6 +1,6 @@
 import { createMiddleware } from 'hono/factory'
 import type { ZodSchema } from 'zod'
-import type { Variables } from '../types'
+import type { Variables } from '../types/index.js'
 
 type ValidationTarget = 'json' | 'query' | 'param'
 
