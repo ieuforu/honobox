@@ -1,0 +1,7 @@
+inspector.selena.ink {
+	encode zstd gzip
+
+	# Caddy flushes event-stream responses immediately by default. Keep its
+	# default disconnect cancellation; do not set flush_interval to -1.
+	reverse_proxy 127.0.0.1:3101
+}

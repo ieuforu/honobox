@@ -17,8 +17,8 @@
     "dev": "pnpm --parallel -r dev",
     "dev:gateway": "pnpm --filter @ai-gateway/gateway dev",
     "dev:dashboard": "pnpm --filter @ai-gateway/dashboard dev",
-    "build": "pnpm --parallel -r build",
-    "typecheck": "pnpm --parallel -r typecheck",
+    "build": "tsc -b packages/shared && pnpm --parallel -r build",
+    "typecheck": "tsc -b packages/shared && pnpm --parallel -r typecheck",
     "lint": "pnpm --parallel -r lint",
     "fmt": "pnpm --parallel -r fmt",
     "test": "pnpm --parallel -r test",
@@ -28,6 +28,9 @@
     "db:push": "pnpm --filter @ai-gateway/gateway db:push",
     "lab:fault": "node scripts/fault-lab.mjs",
     "demo:seed": "node apps/gateway/scripts/seed-demo.mjs",
+    "dev:inspector": "pnpm --filter @honobox/inspector start",
+    "build:inspector": "pnpm --filter @honobox/inspector build",
+    "test:deepseek": "node scripts/smoke-deepseek.mjs",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
   "devDependencies": {

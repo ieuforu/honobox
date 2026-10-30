@@ -1,0 +1,27 @@
+{
+  "name": "@honobox/inspector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "start": "pnpm build:web && go run ./cmd/honobox",
+    "build:web": "tsc --noEmit && vite build --config vite.config.ts",
+    "build": "pnpm build:web && go build -o ../../bin/honobox ./cmd/honobox",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint ui/",
+    "fmt": "oxfmt ui/ vite.config.ts",
+    "test": "go test -race -timeout 45s ./..."
+  },
+  "dependencies": {
+    "lucide-react": "^0.469.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "vite": "^6.0.0"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "url": "https://inspector.selena.ink",
+  "checks": [
+    {
+      "name": "https_health",
+      "passed": true
+    },
+    {
+      "name": "public_demo_only_shows_lab",
+      "passed": true,
+      "records": 5
+    },
+    {
+      "name": "anonymous_execution_rejected",
+      "passed": true
+    },
+    {
+      "name": "server_deepseek_stream",
+      "passed": true,
+      "httpStatus": 200,
+      "firstOutputMs": 645,
+      "durationMs": 729
+    },
+    {
+      "name": "private_live_trace_isolated",
+      "passed": true
+    },
+    {
+      "name": "caddy_disconnect_cancellation",
+      "passed": true
+    },
+    {
+      "name": "owner_access_enabled",
+      "passed": true
+    }
+  ],
+  "verifiedAt": "2026-10-30T09:27:56.332Z",
+  "existingSites": [
+    {
+      "url": "https://selena.ink",
+      "status": 200
+    },
+    {
+      "url": "https://comic.selena.ink",
+      "status": 200
+    },
+    {
+      "url": "https://honobox.selena.ink",
+      "status": 200
+    }
+  ],
+  "success": true
+}

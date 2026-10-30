@@ -1,5 +1,10 @@
 # HonoBox
 
+**New development preview:** [Go + TypeScript Request Inspector](docs/inspector.md).
+**Hosted read-only inspector:** <https://inspector.selena.ink>.
+Run `pnpm dev:inspector` for a local tool-call and failure lab; no provider key is needed.
+The existing gateway below remains available during this new phase.
+
 An authenticated, OpenAI-compatible LLM gateway with streaming proxying, encrypted provider credentials, per-key rate limits, and a real-time React control plane.
 
 ![CI](https://github.com/ieuforu/honobox/actions/workflows/ci.yml/badge.svg)

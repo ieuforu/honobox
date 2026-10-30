@@ -19,4 +19,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/inspector/go.mod
+          cache-dependency-path: apps/inspector/go.sum
       - run: pnpm check

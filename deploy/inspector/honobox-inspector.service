@@ -1,0 +1,27 @@
+[Unit]
+Description=HonoBox Go Request Inspector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=honobox-inspector
+Group=honobox-inspector
+WorkingDirectory=/srv/honobox-inspector/current
+EnvironmentFile=/etc/honobox-inspector.env
+ExecStart=/srv/honobox-inspector/current/honobox
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+StateDirectory=honobox-inspector
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictSUIDSGID=true
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

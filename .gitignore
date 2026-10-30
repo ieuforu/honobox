@@ -7,3 +7,7 @@ dist
 .DS_Store
 .wrangler
 .turbo
+bin/
+.data/
+apps/inspector/webdist/*
+!apps/inspector/webdist/.keep
