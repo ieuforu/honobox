@@ -15,6 +15,7 @@ import (
 )
 
 type Config struct {
+	Provider     string
 	UpstreamURL  string
 	APIKey       string
 	GatewayToken string
@@ -34,11 +35,21 @@ type Server struct {
 }
 
 func New(cfg Config, store *trace.Store) *Server {
+	if cfg.Provider == "" {
+		cfg.Provider = ProviderDeepSeek
+	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 90 * time.Second
 	}
 	if cfg.Model == "" {
 		cfg.Model = "deepseek-flash"
+		if cfg.Provider == ProviderOpenRouterFree {
+			cfg.Model = "openrouter/free"
+		}
+	}
+	if cfg.Provider == ProviderOpenRouterFree {
+		// Free mode never sends its key to a configurable upstream.
+		cfg.UpstreamURL = OpenRouterFreeBaseURL
 	}
 	s := &Server{cfg: cfg, store: store, client: &http.Client{
 		Timeout: cfg.Timeout,
@@ -50,7 +61,7 @@ func New(cfg Config, store *trace.Store) *Server {
 	})
 	s.mux.Handle("GET /api/config", s.readAccess(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		demo := isDemoRequest(r)
-		writeJSON(w, 200, map[string]any{"liveConfigured": cfg.APIKey != "" && !demo, "model": cfg.Model, "upstream": cfg.UpstreamURL, "demo": demo})
+		writeJSON(w, 200, map[string]any{"liveConfigured": cfg.APIKey != "" && !demo && ValidateProviderConfig(cfg) == nil, "provider": cfg.Provider, "model": cfg.Model, "upstream": cfg.UpstreamURL, "demo": demo})
 	})))
 	s.mux.Handle("GET /api/traces", s.readAccess(http.HandlerFunc(s.list)))
 	s.mux.Handle("GET /api/traces/{id}", s.readAccess(http.HandlerFunc(s.detail)))

@@ -25,8 +25,18 @@ import {
   Zap,
 } from 'lucide-react'
 import { assembleOutput, type Trace } from './types'
+import { observation, sampleTraces, traceAtEvent, writeSnapshot } from './recordings'
+import { Playback, SnapshotDialog } from './RecordingControls'
 
-type Config = { liveConfigured: boolean; model: string; upstream: string; demo: boolean }
+type Config = {
+  liveConfigured: boolean
+  model: string
+  upstream: string
+  demo: boolean
+  provider?: string
+}
+const startsOffline =
+  import.meta.env.MODE === 'offline' || new URLSearchParams(location.search).get('offline') === '1'
 const scenarios = [
   { id: 'tool-call', title: 'Tool call', description: 'Watch arguments assemble', icon: Braces },
   {
@@ -47,20 +57,31 @@ const scenarios = [
 const failures = new Set(['failed', 'interrupted', 'timeout', 'cancelled'])
 const ms = (value: number | null | undefined) =>
   value == null ? '—' : `${value.toLocaleString()} ms`
-const pretty = (value: unknown) => JSON.stringify(value, null, 2)
+const pretty = (value: unknown) => {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return 'This JSON is too deeply nested to display.'
+  }
+}
 
 export default function App() {
-  const [traces, setTraces] = useState<Trace[]>([])
-  const [selected, setSelected] = useState('')
-  const [detail, setDetail] = useState<Trace | null>(null)
-  const [config, setConfig] = useState<Config | null>(null)
+  const [offline, setOffline] = useState(startsOffline)
+  const [recordings, setRecordings] = useState<Trace[]>(sampleTraces)
+  const [serverTraces, setTraces] = useState<Trace[]>([])
+  const [selected, setSelected] = useState(startsOffline ? sampleTraces[0].id : '')
+  const [record, setDetail] = useState<Trace | null>(null)
+  const [frame, setFrame] = useState<number | null>(null)
+  const [snapshot, setSnapshot] = useState<{ trace?: Trace } | null>(null)
+  const closeSnapshot = useCallback(() => setSnapshot(null), [])
+  const [serverConfig, setConfig] = useState<Config | null>(null)
   const [tab, setTab] = useState('overview')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [connectionError, setConnectionError] = useState('')
-  const [connected, setConnected] = useState(false)
+  const [serverConnected, setConnected] = useState(false)
   const [settings, setSettings] = useState(false)
   const [playground, setPlayground] = useState(false)
   const [token, setToken] = useState(() => sessionStorage.getItem('honobox.inspector.admin') ?? '')
@@ -70,8 +91,16 @@ export default function App() {
   const [body, setBody] = useState('')
   const [copied, setCopied] = useState(false)
   const controller = useRef<AbortController | null>(null)
+  const traces = offline ? recordings : serverTraces
+  const config = offline
+    ? { liveConfigured: false, model: 'honobox-offline', upstream: '', demo: true }
+    : serverConfig
+  const connected = offline || serverConnected
+  const detail =
+    offline && record ? traceAtEvent(record, frame ?? record.events?.length ?? 0) : record
 
   const refresh = useCallback(async () => {
+    if (offline) return
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined
     const [list, configuration] = await Promise.all([
       fetch('/api/traces', { headers }),
@@ -87,9 +116,10 @@ export default function App() {
     setConfig(await configuration.json())
     setConnected(true)
     setConnectionError('')
-  }, [token])
+  }, [token, offline])
 
   useEffect(() => {
+    if (offline) return
     let active = true
     const load = async () => {
       try {
@@ -107,9 +137,14 @@ export default function App() {
       active = false
       clearInterval(timer)
     }
-  }, [refresh])
+  }, [refresh, offline])
 
   useEffect(() => {
+    setFrame(null)
+    if (offline) {
+      setDetail(recordings.find((item) => item.id === selected) ?? null)
+      return
+    }
     if (!selected) {
       setDetail(null)
       return
@@ -133,7 +168,7 @@ export default function App() {
       active = false
       clearInterval(timer)
     }
-  }, [selected, token])
+  }, [selected, token, offline, recordings])
 
   useEffect(() => () => controller.current?.abort(), [])
 
@@ -145,7 +180,9 @@ export default function App() {
         return
       }
       setSelected(sample.id)
-      setDetail(null)
+      if (offline) setDetail(sample)
+      else if (sample.id !== selected) setDetail(null)
+      setFrame(null)
       setTab('overview')
       return
     }
@@ -208,11 +245,19 @@ export default function App() {
   const output = assembleOutput(detail?.events)
   const successful = traces.filter((item) => item.status === 'completed').length
   const failed = traces.filter((item) => failures.has(item.status)).length
+  const openOffline = () => {
+    controller.current?.abort()
+    setOffline(true)
+    setSelected(recordings[0]?.id ?? '')
+    setError('')
+    setConnectionError('')
+    setTab('overview')
+  }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="HonoBox home">
+        <a className="brand" href={offline ? '/?offline=1' : '/'} aria-label="HonoBox home">
           <span className="brand-symbol">H</span>
           <span>
             HonoBox<span className="brand-label">INSPECTOR</span>
@@ -231,8 +276,14 @@ export default function App() {
             <Layers3 size={17} />
           </span>
           <div>
-            <strong>{config?.demo ? 'Demo workspace' : 'Inspector workspace'}</strong>
-            <span>Go + TypeScript</span>
+            <strong>
+              {offline
+                ? 'Offline workspace'
+                : config?.demo
+                  ? 'Demo workspace'
+                  : 'Inspector workspace'}
+            </strong>
+            <span>{offline ? 'Browser-only recordings' : 'Go + TypeScript'}</span>
           </div>
           <span className={`connection-dot ${connected ? 'online' : ''}`} />
         </div>
@@ -240,7 +291,7 @@ export default function App() {
           <Activity size={16} /> Requests <span>{traces.length}</span>
         </div>
         <div className="lab-heading">
-          <span>FAILURE LAB</span>
+          <span>{offline ? 'RECORDED EXAMPLES' : 'FAILURE LAB'}</span>
           <FlaskConical size={14} />
         </div>
         <p className="lab-description">
@@ -256,7 +307,11 @@ export default function App() {
               <item.icon size={16} />
               <span>
                 <strong>{item.title}</strong>
-                <small>{item.description}</small>
+                <small>
+                  {offline && item.id === 'slow'
+                    ? 'A recorded client cancellation'
+                    : item.description}
+                </small>
               </span>
               <ChevronRight size={13} />
             </button>
@@ -268,8 +323,12 @@ export default function App() {
               <Terminal size={16} />
             </span>
             <div>
-              <strong>Your traces stay here.</strong>
-              <p>Stored in this inspector's SQLite file.</p>
+              <strong>{offline ? 'No API key needed.' : 'Your traces stay here.'}</strong>
+              <p>
+                {offline
+                  ? 'Recordings stay in this page’s memory.'
+                  : "Stored in this inspector's SQLite file."}
+              </p>
             </div>
           </div>
           <button className="settings-button" onClick={() => setSettings(true)}>
@@ -287,7 +346,11 @@ export default function App() {
           </div>
           <div className="topbar-right">
             <span className={`connection-dot ${connected ? 'online' : ''}`} />
-            {connected ? 'Inspector connected' : 'Connecting…'}
+            {offline
+              ? 'Offline · zero model calls'
+              : connected
+                ? 'Inspector connected'
+                : 'Connecting…'}
             <span className="topbar-divider" />
             <span className="mono">/v1/chat/completions</span>
           </div>
@@ -301,37 +364,49 @@ export default function App() {
               </h1>
               <p>Follow the stream. Find where it breaks.</p>
             </div>
-            <button
-              className="primary"
-              disabled={busy || !connected || config?.demo}
-              title={config?.demo ? 'Connect as the owner to send real requests' : undefined}
-              onClick={() => {
-                setBody(
-                  pretty({
-                    model: config?.model ?? 'deepseek-flash',
-                    messages: [
-                      { role: 'user', content: 'Explain streaming in one short sentence.' },
-                    ],
-                    stream: true,
-                    thinking: { type: 'disabled' },
-                  }),
-                )
-                setPlayground(true)
-              }}
-            >
-              <Plus size={16} /> New request
-            </button>
+            <div className="heading-actions">
+              <button className="secondary" disabled={busy} onClick={() => setSnapshot({})}>
+                Import trace
+              </button>
+              {!offline && (
+                <button className="secondary" disabled={busy} onClick={openOffline}>
+                  Offline demo
+                </button>
+              )}
+              <button
+                className="primary"
+                disabled={busy || !connected || config?.demo}
+                title={config?.demo ? 'Connect as the owner to send real requests' : undefined}
+                onClick={() => {
+                  setBody(
+                    pretty({
+                      model: config?.model ?? 'deepseek-flash',
+                      messages: [
+                        { role: 'user', content: 'Explain streaming in one short sentence.' },
+                      ],
+                      stream: true,
+                    }),
+                  )
+                  setPlayground(true)
+                }}
+              >
+                <Plus size={16} /> New request
+              </button>
+            </div>
           </div>
           {config?.demo && (
             <div className="demo-notice">
               <FlaskConical size={15} />
               <span>
-                Read-only demo · explore saved failure scenarios. Private traces and live requests
-                require owner access.
+                {offline
+                  ? 'Offline demo · synthetic examples and imported recordings. Playback sends no model requests.'
+                  : 'Read-only demo · explore saved failure scenarios. Private traces and live requests require owner access.'}
               </span>
-              <button onClick={() => setSettings(true)}>
-                Owner connection <ArrowRight size={13} />
-              </button>
+              {!offline && (
+                <button onClick={() => setSettings(true)}>
+                  Owner connection <ArrowRight size={13} />
+                </button>
+              )}
             </div>
           )}
           {(error || connectionError) && (
@@ -353,7 +428,7 @@ export default function App() {
               <span>Captured requests</span>
               <strong>
                 {traces.length}
-                <small>latest 100</small>
+                <small>{offline ? 'in this page' : 'latest 100'}</small>
               </strong>
             </div>
             <div>
@@ -373,17 +448,23 @@ export default function App() {
             <div>
               <span>Live provider</span>
               <strong className="provider-name">
-                {config?.demo
-                  ? 'Owner access'
-                  : config?.liveConfigured
-                    ? 'DeepSeek'
-                    : 'Not configured'}
-                <small>
-                  {config?.demo
-                    ? 'Connect to send live requests'
+                {offline
+                  ? 'Offline'
+                  : config?.demo
+                    ? 'Owner access'
                     : config?.liveConfigured
-                      ? config.model
-                      : 'The local lab is ready to use'}
+                      ? config.provider === 'openrouter-free'
+                        ? 'OpenRouter Free'
+                        : 'DeepSeek'
+                      : 'Not configured'}
+                <small>
+                  {offline
+                    ? 'No provider connection'
+                    : config?.demo
+                      ? 'Connect to send live requests'
+                      : config?.liveConfigured
+                        ? config.model
+                        : 'The local lab is ready to use'}
                 </small>
               </strong>
             </div>
@@ -428,7 +509,9 @@ export default function App() {
                     className={`request-row ${selected === item.id ? 'selected' : ''}`}
                     onClick={() => {
                       setSelected(item.id)
-                      setDetail(null)
+                      if (offline) setDetail(item)
+                      else if (item.id !== selected) setDetail(null)
+                      setFrame(null)
                     }}
                   >
                     <div className="row-main">
@@ -458,7 +541,10 @@ export default function App() {
                 )}
               </div>
               <div className="list-footer">
-                <span className="connection-dot online" /> Auto-refreshing · saved across restarts
+                <span className="connection-dot online" />{' '}
+                {offline
+                  ? 'Recordings · cleared on reload'
+                  : 'Auto-refreshing · saved across restarts'}
               </div>
             </div>
 
@@ -494,7 +580,8 @@ export default function App() {
                     <Play size={14} /> Run a tool-call example
                   </button>
                   <div className="empty-footnote">
-                    <CircleHelp size={13} /> Lab traffic is synthetic and never calls DeepSeek.
+                    <CircleHelp size={13} /> Lab traffic is synthetic and never calls a model
+                    provider.
                   </div>
                 </div>
               ) : !detail ? (
@@ -533,8 +620,34 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                    <Status status={detail.status} />
+                    <div className="detail-actions">
+                      <Status status={detail.status} />
+                      <button
+                        className="secondary"
+                        disabled={record?.status === 'running'}
+                        onClick={() => {
+                          try {
+                            if (record) {
+                              writeSnapshot(record)
+                              setSnapshot({ trace: record })
+                            }
+                          } catch (e) {
+                            setError((e as Error).message)
+                          }
+                        }}
+                      >
+                        Export JSON
+                      </button>
+                    </div>
                   </div>
+                  {offline && record && (
+                    <Playback
+                      key={record.id}
+                      trace={record}
+                      count={frame ?? record.events?.length ?? 0}
+                      onChange={setFrame}
+                    />
+                  )}
                   <div className="tabs" role="tablist" aria-label="Trace views">
                     {[
                       ['overview', 'Overview'],
@@ -557,6 +670,10 @@ export default function App() {
                   <div className="detail-body">
                     {tab === 'overview' && (
                       <>
+                        <div className="observation">
+                          <CircleHelp size={16} />
+                          <p>{observation(detail)}</p>
+                        </div>
                         <div className="trace-metrics">
                           <div>
                             <span>Total duration</span>
@@ -671,7 +788,13 @@ export default function App() {
                         <div className="code-label">
                           <Terminal size={14} /> Captured response bytes
                         </div>
-                        <pre>{detail.response || 'Waiting for response…'}</pre>
+                        <pre>
+                          {offline &&
+                          record &&
+                          (frame ?? record.events?.length ?? 0) < (record.events?.length ?? 0)
+                            ? 'Captured response bytes are available at the end of playback. Parsed event boundaries are not raw network boundaries.'
+                            : detail.response || 'No response body captured.'}
+                        </pre>
                       </div>
                     )}
                   </div>
@@ -680,7 +803,7 @@ export default function App() {
             </div>
           </section>
           <footer className="page-footer">
-            <span>HonoBox Inspector · first working slice</span>
+            <span>HonoBox Inspector · inspect, replay, understand</span>
             <span>
               <span className="lab-square" /> LAB = synthetic traffic{' '}
               <span className="live-square" /> LIVE = your configured provider
@@ -688,6 +811,25 @@ export default function App() {
           </footer>
         </main>
       </div>
+
+      {snapshot && (
+        <SnapshotDialog
+          trace={snapshot.trace}
+          onClose={closeSnapshot}
+          onImport={(item) => {
+            setRecordings((items) =>
+              [item, ...items.filter((old) => old.id !== item.id)].slice(0, 100),
+            )
+            setOffline(true)
+            setSelected(item.id)
+            setDetail(item)
+            setFrame(null)
+            setTab('overview')
+            setError('')
+            setConnectionError('')
+          }}
+        />
+      )}
 
       {busy && (
         <div className="running-notice" role="status">
@@ -744,6 +886,8 @@ export default function App() {
                 sessionStorage.setItem('honobox.inspector.admin', token)
                 sessionStorage.setItem('honobox.inspector.gateway', gatewayToken)
                 setSettings(false)
+                setOffline(false)
+                setSelected('')
                 setError('')
                 void refresh().catch((e) => setError(e.message))
               }}
@@ -774,7 +918,7 @@ export default function App() {
             <p>
               {config?.liveConfigured
                 ? 'This sends a real request using your server-configured provider.'
-                : 'Live requests need DEEPSEEK_API_KEY in the Go server environment. You can use every local lab without it.'}
+                : 'Live requests need a provider key in the Go server environment. Every local lab and offline recording works without one.'}
             </p>
             <label htmlFor="request-body">Chat Completions JSON</label>
             <textarea

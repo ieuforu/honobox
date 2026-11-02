@@ -47,7 +47,17 @@ func run() error {
 	if host != "localhost" && (ip == nil || !ip.IsLoopback()) && (admin == "" || gateway == "") {
 		return errors.New("non-loopback listeners require HONOBOX_ADMIN_TOKEN and HONOBOX_GATEWAY_TOKEN")
 	}
+	provider := env("HONOBOX_PROVIDER", server.ProviderDeepSeek)
 	upstream := env("HONOBOX_UPSTREAM_BASE_URL", "https://api.deepseek.com")
+	model, apiKey := env("HONOBOX_MODEL", "deepseek-flash"), os.Getenv("DEEPSEEK_API_KEY")
+	if provider == server.ProviderOpenRouterFree {
+		upstream = server.OpenRouterFreeBaseURL
+		model, apiKey = env("HONOBOX_MODEL", "openrouter/free"), os.Getenv("OPENROUTER_API_KEY")
+	}
+	cfg := server.Config{Provider: provider, UpstreamURL: upstream, APIKey: apiKey, AdminToken: admin, GatewayToken: gateway, Model: model, Assets: inspector.Assets(), DemoMode: demoMode}
+	if err := server.ValidateProviderConfig(cfg); err != nil {
+		return err
+	}
 	u, err := url.Parse(upstream)
 	if err != nil || u.Host == "" || u.User != nil || (u.Scheme != "https" && u.Scheme != "http") {
 		return errors.New("invalid upstream base URL")
@@ -61,7 +71,7 @@ func run() error {
 		return err
 	}
 	defer store.Close()
-	app := server.New(server.Config{UpstreamURL: upstream, APIKey: os.Getenv("DEEPSEEK_API_KEY"), AdminToken: admin, GatewayToken: gateway, Model: env("HONOBOX_MODEL", "deepseek-flash"), Assets: inspector.Assets(), DemoMode: demoMode}, store)
+	app := server.New(cfg, store)
 	httpServer := &http.Server{Addr: addr, Handler: app, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -73,7 +83,7 @@ func run() error {
 			_ = httpServer.Close()
 		}
 	}()
-	slog.Info("HonoBox Inspector ready", "url", "http://"+addr, "live_configured", os.Getenv("DEEPSEEK_API_KEY") != "")
+	slog.Info("HonoBox Inspector ready", "url", "http://"+addr, "provider", provider, "live_configured", apiKey != "")
 	err = httpServer.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

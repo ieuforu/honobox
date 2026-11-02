@@ -29,6 +29,7 @@
     "lab:fault": "node scripts/fault-lab.mjs",
     "demo:seed": "node apps/gateway/scripts/seed-demo.mjs",
     "dev:inspector": "pnpm --filter @honobox/inspector start",
+    "demo:inspector": "pnpm --filter @honobox/inspector demo",
     "build:inspector": "pnpm --filter @honobox/inspector build",
     "test:deepseek": "node scripts/smoke-deepseek.mjs",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"

@@ -4,6 +4,22 @@ The first slice of the new inspector lives in `apps/inspector`. The existing Hon
 
 ## Run the local lab
 
+For a browser-only demonstration, run `pnpm demo:inspector` after installing dependencies, then open `http://127.0.0.1:5174`.
+Production builds also support `/?offline=1`. This mode skips API polling and loads explicitly synthetic examples.
+Use the playback slider to reveal events one at a time; no model requests or tools are executed.
+The timings in these examples are authored fixtures, not measured provider performance.
+
+**Export JSON** previews a versioned snapshot before download. Review and manually remove sensitive prompts,
+outputs or tool arguments before sharing; export is not automatic anonymization. **Import trace** accepts the
+snapshot in this page's memory, without uploading it or changing the server database. Reloading clears imports.
+Imports are limited to 1 MiB and 300 ordered events. Raw response bytes are available at the end of playback,
+because parsed SSE event boundaries do not represent transport chunk boundaries. Event playback advances at
+400 ms per event for readability, not recorded wall-clock speed.
+
+See the [walkthrough](inspector-walkthrough.md) for a short demo and failure-path explanations.
+
+The following local lab exercises the actual Go forwarding/recording code, independently of the browser-only samples.
+
 Requirements: Go 1.24+, Node.js 22+, pnpm.
 
 ```sh
@@ -16,6 +32,10 @@ Open `http://127.0.0.1:3100`. No provider key is required for the lab. Choose To
 The Go service captures actual responses from the simulator through the same forwarding and recording path used for live requests. It records received/headers/first output/finish/failure timing, preserves raw SSE bytes, and assembles tool-argument fragments in the browser. The gateway does not execute model-requested tools.
 
 ## Optional live DeepSeek connection
+
+For a no-recharge alternative, see [OpenRouter free-only mode](free-testing.md).
+It requires your own account key and explicitly rejects paid models and routing overrides. Live availability
+and model behavior are not established by the offline test suite.
 
 Set `DEEPSEEK_API_KEY` privately in the terminal environment that starts the service. Never put the provider key into the browser's Connection dialog, tracked source, issues, or chat. HonoBox does not read pi configuration files. You can keep using the lab while the key is unset.
 
@@ -62,4 +82,5 @@ For frontend development, run the Go service and `pnpm --filter @honobox/inspect
 - The overview renders the first completion choice. Raw events remain available for other choices.
 - Provider authorization headers are not stored. Request bodies, output, and tool arguments are stored locally and can contain application data.
 - No automatic retries or replay: replaying a tool-related request may have side effects in the client application.
+- Browser recording playback only reveals stored events; it is not a replay of network requests or tool execution.
 - Real DeepSeek connectivity is not verified by mock-based tests.

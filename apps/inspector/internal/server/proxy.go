@@ -182,6 +182,19 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, scenario string
 		writeJSON(w, 400, map[string]string{"error": "A model and nonempty messages array are required"})
 		return
 	}
+	if scenario == "" {
+		if err := ValidateProviderConfig(s.cfg); err != nil {
+			writeJSON(w, 503, map[string]string{"error": err.Error()})
+			return
+		}
+		if s.cfg.Provider == ProviderOpenRouterFree {
+			raw, err = prepareFreeRequest(raw)
+			if err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
+		}
+	}
 	id := make([]byte, 12)
 	if _, err := rand.Read(id); err != nil {
 		writeJSON(w, 500, map[string]string{"error": "Cannot create trace"})
@@ -215,7 +228,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, scenario string
 	if scenario != "" {
 		response, err = mockResponse(ctx, scenario)
 	} else if s.cfg.APIKey == "" {
-		err = errors.New("DeepSeek is not configured; local lab scenarios work without a key")
+		err = errors.New("Live provider is not configured; local lab scenarios work without a key")
 	} else {
 		var upstream *http.Request
 		upstream, err = http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(s.cfg.UpstreamURL, "/")+"/chat/completions", bytes.NewReader(raw))
