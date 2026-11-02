@@ -3,6 +3,8 @@
 **New development preview:** [Go + TypeScript Request Inspector](docs/inspector.md).
 **Hosted read-only inspector:** <https://inspector.selena.ink>.
 Run `pnpm dev:inspector` for a local tool-call and failure lab; no provider key is needed.
+Run `pnpm demo:inspector` for the browser-only offline demo, including event playback and JSON snapshot import/export. It needs neither Go nor an API key.
+See the [two-minute walkthrough and engineering notes](docs/inspector-walkthrough.md), or [optional free API testing](docs/free-testing.md).
 The existing gateway below remains available during this new phase.
 
 An authenticated, OpenAI-compatible LLM gateway with streaming proxying, encrypted provider credentials, per-key rate limits, and a real-time React control plane.

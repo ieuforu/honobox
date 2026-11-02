@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Activity,
-  ArrowDownLeft,
   ArrowRight,
   Braces,
   Check,
@@ -11,7 +10,6 @@ import {
   Copy,
   FlaskConical,
   KeyRound,
-  Layers3,
   LoaderCircle,
   Play,
   Plus,
@@ -25,8 +23,18 @@ import {
   Zap,
 } from 'lucide-react'
 import { assembleOutput, type Trace } from './types'
+import { observation, sampleTraces, traceAtEvent, writeSnapshot } from './recordings'
+import { Playback, SnapshotDialog } from './RecordingControls'
 
-type Config = { liveConfigured: boolean; model: string; upstream: string; demo: boolean }
+type Config = {
+  liveConfigured: boolean
+  model: string
+  upstream: string
+  demo: boolean
+  provider?: string
+}
+const startsOffline =
+  import.meta.env.MODE === 'offline' || new URLSearchParams(location.search).get('offline') === '1'
 const scenarios = [
   { id: 'tool-call', title: 'Tool call', description: 'Watch arguments assemble', icon: Braces },
   {
@@ -45,22 +53,41 @@ const scenarios = [
   { id: 'slow', title: 'Slow stream', description: 'Run it, then try cancelling', icon: Radio },
 ]
 const failures = new Set(['failed', 'interrupted', 'timeout', 'cancelled'])
+const traceTitle = (trace: Trace) =>
+  ({
+    'tool-call': 'Tool call',
+    interrupted: 'Interrupted stream',
+    'upstream-error': 'Provider unavailable',
+    timeout: 'Response timeout',
+    slow: trace.status === 'cancelled' ? 'Cancelled request' : 'Slow stream',
+  })[trace.scenario ?? ''] ?? trace.model
 const ms = (value: number | null | undefined) =>
   value == null ? '—' : `${value.toLocaleString()} ms`
-const pretty = (value: unknown) => JSON.stringify(value, null, 2)
+const pretty = (value: unknown) => {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return 'This JSON is too deeply nested to display.'
+  }
+}
 
 export default function App() {
-  const [traces, setTraces] = useState<Trace[]>([])
-  const [selected, setSelected] = useState('')
-  const [detail, setDetail] = useState<Trace | null>(null)
-  const [config, setConfig] = useState<Config | null>(null)
+  const [offline, setOffline] = useState(startsOffline)
+  const [recordings, setRecordings] = useState<Trace[]>(sampleTraces)
+  const [serverTraces, setTraces] = useState<Trace[]>([])
+  const [selected, setSelected] = useState(startsOffline ? sampleTraces[0].id : '')
+  const [record, setDetail] = useState<Trace | null>(null)
+  const [frame, setFrame] = useState<number | null>(null)
+  const [snapshot, setSnapshot] = useState<{ trace?: Trace } | null>(null)
+  const closeSnapshot = useCallback(() => setSnapshot(null), [])
+  const [serverConfig, setConfig] = useState<Config | null>(null)
   const [tab, setTab] = useState('overview')
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [connectionError, setConnectionError] = useState('')
-  const [connected, setConnected] = useState(false)
+  const [serverConnected, setConnected] = useState(false)
   const [settings, setSettings] = useState(false)
   const [playground, setPlayground] = useState(false)
   const [token, setToken] = useState(() => sessionStorage.getItem('honobox.inspector.admin') ?? '')
@@ -70,8 +97,16 @@ export default function App() {
   const [body, setBody] = useState('')
   const [copied, setCopied] = useState(false)
   const controller = useRef<AbortController | null>(null)
+  const traces = offline ? recordings : serverTraces
+  const config = offline
+    ? { liveConfigured: false, model: 'honobox-offline', upstream: '', demo: true }
+    : serverConfig
+  const connected = offline || serverConnected
+  const detail =
+    offline && record ? traceAtEvent(record, frame ?? record.events?.length ?? 0) : record
 
   const refresh = useCallback(async () => {
+    if (offline) return
     const headers = token ? { Authorization: `Bearer ${token}` } : undefined
     const [list, configuration] = await Promise.all([
       fetch('/api/traces', { headers }),
@@ -87,9 +122,10 @@ export default function App() {
     setConfig(await configuration.json())
     setConnected(true)
     setConnectionError('')
-  }, [token])
+  }, [token, offline])
 
   useEffect(() => {
+    if (offline) return
     let active = true
     const load = async () => {
       try {
@@ -107,9 +143,14 @@ export default function App() {
       active = false
       clearInterval(timer)
     }
-  }, [refresh])
+  }, [refresh, offline])
 
   useEffect(() => {
+    setFrame(null)
+    if (offline) {
+      setDetail(recordings.find((item) => item.id === selected) ?? null)
+      return
+    }
     if (!selected) {
       setDetail(null)
       return
@@ -133,7 +174,7 @@ export default function App() {
       active = false
       clearInterval(timer)
     }
-  }, [selected, token])
+  }, [selected, token, offline, recordings])
 
   useEffect(() => () => controller.current?.abort(), [])
 
@@ -145,7 +186,9 @@ export default function App() {
         return
       }
       setSelected(sample.id)
-      setDetail(null)
+      if (offline) setDetail(sample)
+      else if (sample.id !== selected) setDetail(null)
+      setFrame(null)
       setTab('overview')
       return
     }
@@ -203,21 +246,32 @@ export default function App() {
     (item) =>
       (filter === 'all' ||
         (filter === 'failed' ? failures.has(item.status) : item.source === 'live')) &&
-      `${item.id} ${item.model} ${item.status}`.toLowerCase().includes(search.toLowerCase()),
+      `${item.id} ${item.model} ${item.status} ${traceTitle(item)}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   )
   const output = assembleOutput(detail?.events)
   const successful = traces.filter((item) => item.status === 'completed').length
   const failed = traces.filter((item) => failures.has(item.status)).length
+  const openOffline = () => {
+    controller.current?.abort()
+    setOffline(true)
+    setSelected(recordings[0]?.id ?? '')
+    setError('')
+    setConnectionError('')
+    setTab('overview')
+  }
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="HonoBox home">
-          <span className="brand-symbol">H</span>
-          <span>
-            HonoBox<span className="brand-label">INSPECTOR</span>
+        <a className="brand" href={offline ? '/?offline=1' : '/'} aria-label="HonoBox home">
+          <span className="brand-symbol">
+            <Braces size={20} strokeWidth={1.8} />
           </span>
-          <span className="version">0.1</span>
+          <span>
+            honobox<span className="brand-label">Request inspector</span>
+          </span>
         </a>
         <button
           className="mobile-connection"
@@ -227,51 +281,43 @@ export default function App() {
           <Settings2 size={18} />
         </button>
         <div className="workspace">
-          <span className="workspace-icon">
-            <Layers3 size={17} />
-          </span>
-          <div>
-            <strong>{config?.demo ? 'Demo workspace' : 'Inspector workspace'}</strong>
-            <span>Go + TypeScript</span>
-          </div>
           <span className={`connection-dot ${connected ? 'online' : ''}`} />
+          <div>
+            <strong>
+              {offline ? 'Offline workspace' : config?.demo ? 'Demo workspace' : 'Local workspace'}
+            </strong>
+            <span>
+              {offline ? 'Saved in this tab' : connected ? 'Inspector connected' : 'Connecting…'}
+            </span>
+          </div>
         </div>
         <div className="nav-item">
           <Activity size={16} /> Requests <span>{traces.length}</span>
         </div>
         <div className="lab-heading">
-          <span>FAILURE LAB</span>
+          <span>{offline ? 'Examples' : 'Failure lab'}</span>
           <FlaskConical size={14} />
         </div>
-        <p className="lab-description">
-          {config?.demo
-            ? 'Select a saved simulator example.'
-            : 'Real requests to a local simulator.'}
-          <br />
-          {config?.demo ? 'Read-only. No model credits used.' : 'No model credits needed.'}
-        </p>
+        <p className="lab-description">Synthetic traces. No model calls.</p>
         <div className="scenarios">
           {scenarios.map((item) => (
-            <button key={item.id} disabled={busy || !connected} onClick={() => void run(item.id)}>
+            <button
+              key={item.id}
+              className={detail?.scenario === item.id ? 'active' : ''}
+              title={
+                offline && item.id === 'slow' ? 'A recorded client cancellation' : item.description
+              }
+              disabled={busy || !connected}
+              onClick={() => void run(item.id)}
+            >
               <item.icon size={16} />
               <span>
                 <strong>{item.title}</strong>
-                <small>{item.description}</small>
               </span>
-              <ChevronRight size={13} />
             </button>
           ))}
         </div>
         <div className="sidebar-bottom">
-          <div className="local-note">
-            <span className="local-icon">
-              <Terminal size={16} />
-            </span>
-            <div>
-              <strong>Your traces stay here.</strong>
-              <p>Stored in this inspector's SQLite file.</p>
-            </div>
-          </div>
           <button className="settings-button" onClick={() => setSettings(true)}>
             <Settings2 size={16} /> Connection <ArrowRight size={14} />
           </button>
@@ -279,59 +325,57 @@ export default function App() {
       </aside>
 
       <div className="main-shell">
-        <header className="topbar">
-          <div>
-            <span className="breadcrumb">Workspace</span>
-            <ChevronRight size={12} />
-            <strong>Request inspector</strong>
-          </div>
-          <div className="topbar-right">
-            <span className={`connection-dot ${connected ? 'online' : ''}`} />
-            {connected ? 'Inspector connected' : 'Connecting…'}
-            <span className="topbar-divider" />
-            <span className="mono">/v1/chat/completions</span>
-          </div>
-        </header>
         <main>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">OBSERVE · UNDERSTAND · FIX</div>
               <h1>
-                Request inspector<span className="heading-dot">.</span>
+                Requests <span className="heading-count">{traces.length}</span>
               </h1>
-              <p>Follow the stream. Find where it breaks.</p>
             </div>
-            <button
-              className="primary"
-              disabled={busy || !connected || config?.demo}
-              title={config?.demo ? 'Connect as the owner to send real requests' : undefined}
-              onClick={() => {
-                setBody(
-                  pretty({
-                    model: config?.model ?? 'deepseek-flash',
-                    messages: [
-                      { role: 'user', content: 'Explain streaming in one short sentence.' },
-                    ],
-                    stream: true,
-                    thinking: { type: 'disabled' },
-                  }),
-                )
-                setPlayground(true)
-              }}
-            >
-              <Plus size={16} /> New request
-            </button>
+            <div className="heading-actions">
+              <button className="secondary" disabled={busy} onClick={() => setSnapshot({})}>
+                Import trace
+              </button>
+              {!offline && (
+                <button className="secondary" disabled={busy} onClick={openOffline}>
+                  Offline demo
+                </button>
+              )}
+              {!config?.demo && (
+                <button
+                  className="primary"
+                  disabled={busy || !connected}
+                  onClick={() => {
+                    setBody(
+                      pretty({
+                        model: config?.model ?? 'deepseek-flash',
+                        messages: [
+                          { role: 'user', content: 'Explain streaming in one short sentence.' },
+                        ],
+                        stream: true,
+                      }),
+                    )
+                    setPlayground(true)
+                  }}
+                >
+                  <Plus size={16} /> New request
+                </button>
+              )}
+            </div>
           </div>
           {config?.demo && (
             <div className="demo-notice">
-              <FlaskConical size={15} />
+              <span className="mode-label">{offline ? 'Offline' : 'Demo'}</span>
               <span>
-                Read-only demo · explore saved failure scenarios. Private traces and live requests
-                require owner access.
+                {offline
+                  ? 'Explore a sample or import a trace. Playback stays in your browser.'
+                  : 'Saved lab traces. Connect as the owner to send requests.'}
               </span>
-              <button onClick={() => setSettings(true)}>
-                Owner connection <ArrowRight size={13} />
-              </button>
+              {!offline && (
+                <button onClick={() => setSettings(true)}>
+                  Owner connection <ArrowRight size={13} />
+                </button>
+              )}
             </div>
           )}
           {(error || connectionError) && (
@@ -348,45 +392,18 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="stats-strip">
-            <div>
-              <span>Captured requests</span>
-              <strong>
-                {traces.length}
-                <small>latest 100</small>
-              </strong>
-            </div>
-            <div>
-              <span>Completed</span>
-              <strong>
-                {successful}
-                <small className="green">with a clean finish</small>
-              </strong>
-            </div>
-            <div>
-              <span>Needs attention</span>
-              <strong>
-                {failed}
-                <small>errors, interruptions & cancellations</small>
-              </strong>
-            </div>
-            <div>
-              <span>Live provider</span>
-              <strong className="provider-name">
-                {config?.demo
-                  ? 'Owner access'
-                  : config?.liveConfigured
-                    ? 'DeepSeek'
-                    : 'Not configured'}
-                <small>
-                  {config?.demo
-                    ? 'Connect to send live requests'
-                    : config?.liveConfigured
-                      ? config.model
-                      : 'The local lab is ready to use'}
-                </small>
-              </strong>
-            </div>
+          <div className="stats-strip" aria-label="Request summary">
+            <span>
+              <i className="summary-dot completed" />
+              {successful} completed
+            </span>
+            <span>
+              <i className="summary-dot attention" />
+              {failed} need attention
+            </span>
+            <span className="provider-name">
+              {offline ? 'No API connection' : config?.liveConfigured ? config.model : 'Local lab'}
+            </span>
           </div>
 
           <section className="inspector-panel" aria-label="Request inspector">
@@ -401,14 +418,14 @@ export default function App() {
                 <Search size={14} />
                 <input
                   aria-label="Search requests"
-                  placeholder="Search model, ID, status…"
+                  placeholder="Filter requests…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </label>
               <div className="filters">
                 {[
-                  ['all', 'All requests'],
+                  ['all', 'All'],
                   ['failed', 'Attention'],
                   ['live', 'Live'],
                 ].map(([id, label]) => (
@@ -428,20 +445,17 @@ export default function App() {
                     className={`request-row ${selected === item.id ? 'selected' : ''}`}
                     onClick={() => {
                       setSelected(item.id)
-                      setDetail(null)
+                      if (offline) setDetail(item)
+                      else if (item.id !== selected) setDetail(null)
+                      setFrame(null)
                     }}
                   >
                     <div className="row-main">
-                      <span className={`row-icon ${failures.has(item.status) ? 'bad' : ''}`}>
-                        {item.status === 'running' ? (
-                          <LoaderCircle className="spin" size={15} />
-                        ) : (
-                          <ArrowDownLeft size={16} />
-                        )}
-                      </span>
                       <div>
-                        <strong>{item.model}</strong>
-                        <span className="mono">{item.id.slice(0, 10)}</span>
+                        <strong>{traceTitle(item)}</strong>
+                        <span className="mono">
+                          {item.scenario ? item.model : item.id.slice(0, 12)}
+                        </span>
                       </div>
                       <span className={`source ${item.source}`}>{item.source}</span>
                     </div>
@@ -458,34 +472,19 @@ export default function App() {
                 )}
               </div>
               <div className="list-footer">
-                <span className="connection-dot online" /> Auto-refreshing · saved across restarts
+                <span className="connection-dot online" />{' '}
+                {offline
+                  ? 'Recordings · cleared on reload'
+                  : 'Auto-refreshing · saved across restarts'}
               </div>
             </div>
 
             <div className="detail-column">
               {!selected ? (
                 <div className="empty-state">
-                  <div className="empty-graphic">
-                    <span className="empty-line" />
-                    <span className="empty-box">
-                      <Braces size={27} />
-                    </span>
-                    <span className="empty-line" />
-                    <span className="empty-small">
-                      <Check size={17} />
-                    </span>
-                  </div>
-                  <span className="eyebrow">A SMALL LAB FOR REAL FAILURE PATHS</span>
-                  <h2>
-                    Make a request.
-                    <br />
-                    See the whole story.
-                  </h2>
-                  <p>
-                    Start with a simulated tool call, then explore
-                    <br />
-                    broken streams, timeouts, and cancellations.
-                  </p>
+                  <Braces size={25} strokeWidth={1.4} />
+                  <h2>Select a request</h2>
+                  <p>Inspect the output, timing and raw events, or start with a sample.</p>
                   <button
                     className="primary"
                     disabled={busy || !connected}
@@ -494,7 +493,8 @@ export default function App() {
                     <Play size={14} /> Run a tool-call example
                   </button>
                   <div className="empty-footnote">
-                    <CircleHelp size={13} /> Lab traffic is synthetic and never calls DeepSeek.
+                    <CircleHelp size={13} /> Lab traffic is synthetic and never calls a model
+                    provider.
                   </div>
                 </div>
               ) : !detail ? (
@@ -506,14 +506,15 @@ export default function App() {
                 <>
                   <div className="detail-heading">
                     <div>
-                      <span className="eyebrow">TRACE DETAIL</span>
                       <h2>
-                        {detail.model}
+                        {traceTitle(detail)}
                         <span className={`source ${detail.source}`}>
                           {detail.source === 'lab' ? 'Local lab' : 'Live'}
                         </span>
                       </h2>
                       <div className="trace-id mono">
+                        <span>{detail.model}</span>
+                        <span className="trace-id-separator">/</span>
                         {detail.id}
                         <button
                           aria-label="Copy trace ID"
@@ -533,8 +534,34 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                    <Status status={detail.status} />
+                    <div className="detail-actions">
+                      <Status status={detail.status} />
+                      <button
+                        className="secondary"
+                        disabled={record?.status === 'running'}
+                        onClick={() => {
+                          try {
+                            if (record) {
+                              writeSnapshot(record)
+                              setSnapshot({ trace: record })
+                            }
+                          } catch (e) {
+                            setError((e as Error).message)
+                          }
+                        }}
+                      >
+                        Export JSON
+                      </button>
+                    </div>
                   </div>
+                  {offline && record && (
+                    <Playback
+                      key={record.id}
+                      trace={record}
+                      count={frame ?? record.events?.length ?? 0}
+                      onChange={setFrame}
+                    />
+                  )}
                   <div className="tabs" role="tablist" aria-label="Trace views">
                     {[
                       ['overview', 'Overview'],
@@ -581,12 +608,6 @@ export default function App() {
                                   : 'Request needs attention'}
                               </strong>
                               <p>{detail.error}</p>
-                              {detail.httpStatus === 200 && (
-                                <small>
-                                  The HTTP connection started successfully; the stream's final state
-                                  is shown separately.
-                                </small>
-                              )}
                             </div>
                           </div>
                         )}
@@ -636,6 +657,18 @@ export default function App() {
                               </div>
                             ))}
                         </div>
+                        <details className="observation">
+                          <summary>
+                            <CircleHelp size={14} /> Reading this trace
+                          </summary>
+                          <p>{observation(detail)}</p>
+                          {detail.error && detail.httpStatus === 200 && (
+                            <p>
+                              HTTP 200 means the connection started successfully. The stream's final
+                              state is shown separately.
+                            </p>
+                          )}
+                        </details>
                         {detail.truncated && (
                           <div className="capture-note">
                             Capture limit reached. This trace contains a partial recording;
@@ -671,7 +704,13 @@ export default function App() {
                         <div className="code-label">
                           <Terminal size={14} /> Captured response bytes
                         </div>
-                        <pre>{detail.response || 'Waiting for response…'}</pre>
+                        <pre>
+                          {offline &&
+                          record &&
+                          (frame ?? record.events?.length ?? 0) < (record.events?.length ?? 0)
+                            ? 'Captured response bytes are available at the end of playback. Parsed event boundaries are not raw network boundaries.'
+                            : detail.response || 'No response body captured.'}
+                        </pre>
                       </div>
                     )}
                   </div>
@@ -680,7 +719,7 @@ export default function App() {
             </div>
           </section>
           <footer className="page-footer">
-            <span>HonoBox Inspector · first working slice</span>
+            <span className="mono">/v1/chat/completions</span>
             <span>
               <span className="lab-square" /> LAB = synthetic traffic{' '}
               <span className="live-square" /> LIVE = your configured provider
@@ -688,6 +727,25 @@ export default function App() {
           </footer>
         </main>
       </div>
+
+      {snapshot && (
+        <SnapshotDialog
+          trace={snapshot.trace}
+          onClose={closeSnapshot}
+          onImport={(item) => {
+            setRecordings((items) =>
+              [item, ...items.filter((old) => old.id !== item.id)].slice(0, 100),
+            )
+            setOffline(true)
+            setSelected(item.id)
+            setDetail(item)
+            setFrame(null)
+            setTab('overview')
+            setError('')
+            setConnectionError('')
+          }}
+        />
+      )}
 
       {busy && (
         <div className="running-notice" role="status">
@@ -744,6 +802,8 @@ export default function App() {
                 sessionStorage.setItem('honobox.inspector.admin', token)
                 sessionStorage.setItem('honobox.inspector.gateway', gatewayToken)
                 setSettings(false)
+                setOffline(false)
+                setSelected('')
                 setError('')
                 void refresh().catch((e) => setError(e.message))
               }}
@@ -774,7 +834,7 @@ export default function App() {
             <p>
               {config?.liveConfigured
                 ? 'This sends a real request using your server-configured provider.'
-                : 'Live requests need DEEPSEEK_API_KEY in the Go server environment. You can use every local lab without it.'}
+                : 'Live requests need a provider key in the Go server environment. Every local lab and offline recording works without one.'}
             </p>
             <label htmlFor="request-body">Chat Completions JSON</label>
             <textarea
