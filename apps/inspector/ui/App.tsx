@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Activity,
-  ArrowDownLeft,
   ArrowRight,
   Braces,
   Check,
@@ -11,7 +10,6 @@ import {
   Copy,
   FlaskConical,
   KeyRound,
-  Layers3,
   LoaderCircle,
   Play,
   Plus,
@@ -55,6 +53,14 @@ const scenarios = [
   { id: 'slow', title: 'Slow stream', description: 'Run it, then try cancelling', icon: Radio },
 ]
 const failures = new Set(['failed', 'interrupted', 'timeout', 'cancelled'])
+const traceTitle = (trace: Trace) =>
+  ({
+    'tool-call': 'Tool call',
+    interrupted: 'Interrupted stream',
+    'upstream-error': 'Provider unavailable',
+    timeout: 'Response timeout',
+    slow: trace.status === 'cancelled' ? 'Cancelled request' : 'Slow stream',
+  })[trace.scenario ?? ''] ?? trace.model
 const ms = (value: number | null | undefined) =>
   value == null ? '—' : `${value.toLocaleString()} ms`
 const pretty = (value: unknown) => {
@@ -240,7 +246,9 @@ export default function App() {
     (item) =>
       (filter === 'all' ||
         (filter === 'failed' ? failures.has(item.status) : item.source === 'live')) &&
-      `${item.id} ${item.model} ${item.status}`.toLowerCase().includes(search.toLowerCase()),
+      `${item.id} ${item.model} ${item.status} ${traceTitle(item)}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   )
   const output = assembleOutput(detail?.events)
   const successful = traces.filter((item) => item.status === 'completed').length
@@ -258,11 +266,12 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <a className="brand" href={offline ? '/?offline=1' : '/'} aria-label="HonoBox home">
-          <span className="brand-symbol">H</span>
-          <span>
-            HonoBox<span className="brand-label">INSPECTOR</span>
+          <span className="brand-symbol">
+            <Braces size={20} strokeWidth={1.8} />
           </span>
-          <span className="version">0.1</span>
+          <span>
+            honobox<span className="brand-label">Request inspector</span>
+          </span>
         </a>
         <button
           className="mobile-connection"
@@ -272,65 +281,43 @@ export default function App() {
           <Settings2 size={18} />
         </button>
         <div className="workspace">
-          <span className="workspace-icon">
-            <Layers3 size={17} />
-          </span>
+          <span className={`connection-dot ${connected ? 'online' : ''}`} />
           <div>
             <strong>
-              {offline
-                ? 'Offline workspace'
-                : config?.demo
-                  ? 'Demo workspace'
-                  : 'Inspector workspace'}
+              {offline ? 'Offline workspace' : config?.demo ? 'Demo workspace' : 'Local workspace'}
             </strong>
-            <span>{offline ? 'Browser-only recordings' : 'Go + TypeScript'}</span>
+            <span>
+              {offline ? 'Saved in this tab' : connected ? 'Inspector connected' : 'Connecting…'}
+            </span>
           </div>
-          <span className={`connection-dot ${connected ? 'online' : ''}`} />
         </div>
         <div className="nav-item">
           <Activity size={16} /> Requests <span>{traces.length}</span>
         </div>
         <div className="lab-heading">
-          <span>{offline ? 'RECORDED EXAMPLES' : 'FAILURE LAB'}</span>
+          <span>{offline ? 'Examples' : 'Failure lab'}</span>
           <FlaskConical size={14} />
         </div>
-        <p className="lab-description">
-          {config?.demo
-            ? 'Select a saved simulator example.'
-            : 'Real requests to a local simulator.'}
-          <br />
-          {config?.demo ? 'Read-only. No model credits used.' : 'No model credits needed.'}
-        </p>
+        <p className="lab-description">Synthetic traces. No model calls.</p>
         <div className="scenarios">
           {scenarios.map((item) => (
-            <button key={item.id} disabled={busy || !connected} onClick={() => void run(item.id)}>
+            <button
+              key={item.id}
+              className={detail?.scenario === item.id ? 'active' : ''}
+              title={
+                offline && item.id === 'slow' ? 'A recorded client cancellation' : item.description
+              }
+              disabled={busy || !connected}
+              onClick={() => void run(item.id)}
+            >
               <item.icon size={16} />
               <span>
                 <strong>{item.title}</strong>
-                <small>
-                  {offline && item.id === 'slow'
-                    ? 'A recorded client cancellation'
-                    : item.description}
-                </small>
               </span>
-              <ChevronRight size={13} />
             </button>
           ))}
         </div>
         <div className="sidebar-bottom">
-          <div className="local-note">
-            <span className="local-icon">
-              <Terminal size={16} />
-            </span>
-            <div>
-              <strong>{offline ? 'No API key needed.' : 'Your traces stay here.'}</strong>
-              <p>
-                {offline
-                  ? 'Recordings stay in this page’s memory.'
-                  : "Stored in this inspector's SQLite file."}
-              </p>
-            </div>
-          </div>
           <button className="settings-button" onClick={() => setSettings(true)}>
             <Settings2 size={16} /> Connection <ArrowRight size={14} />
           </button>
@@ -338,31 +325,12 @@ export default function App() {
       </aside>
 
       <div className="main-shell">
-        <header className="topbar">
-          <div>
-            <span className="breadcrumb">Workspace</span>
-            <ChevronRight size={12} />
-            <strong>Request inspector</strong>
-          </div>
-          <div className="topbar-right">
-            <span className={`connection-dot ${connected ? 'online' : ''}`} />
-            {offline
-              ? 'Offline · zero model calls'
-              : connected
-                ? 'Inspector connected'
-                : 'Connecting…'}
-            <span className="topbar-divider" />
-            <span className="mono">/v1/chat/completions</span>
-          </div>
-        </header>
         <main>
           <div className="page-heading">
             <div>
-              <div className="eyebrow">OBSERVE · UNDERSTAND · FIX</div>
               <h1>
-                Request inspector<span className="heading-dot">.</span>
+                Requests <span className="heading-count">{traces.length}</span>
               </h1>
-              <p>Follow the stream. Find where it breaks.</p>
             </div>
             <div className="heading-actions">
               <button className="secondary" disabled={busy} onClick={() => setSnapshot({})}>
@@ -373,34 +341,35 @@ export default function App() {
                   Offline demo
                 </button>
               )}
-              <button
-                className="primary"
-                disabled={busy || !connected || config?.demo}
-                title={config?.demo ? 'Connect as the owner to send real requests' : undefined}
-                onClick={() => {
-                  setBody(
-                    pretty({
-                      model: config?.model ?? 'deepseek-flash',
-                      messages: [
-                        { role: 'user', content: 'Explain streaming in one short sentence.' },
-                      ],
-                      stream: true,
-                    }),
-                  )
-                  setPlayground(true)
-                }}
-              >
-                <Plus size={16} /> New request
-              </button>
+              {!config?.demo && (
+                <button
+                  className="primary"
+                  disabled={busy || !connected}
+                  onClick={() => {
+                    setBody(
+                      pretty({
+                        model: config?.model ?? 'deepseek-flash',
+                        messages: [
+                          { role: 'user', content: 'Explain streaming in one short sentence.' },
+                        ],
+                        stream: true,
+                      }),
+                    )
+                    setPlayground(true)
+                  }}
+                >
+                  <Plus size={16} /> New request
+                </button>
+              )}
             </div>
           </div>
           {config?.demo && (
             <div className="demo-notice">
-              <FlaskConical size={15} />
+              <span className="mode-label">{offline ? 'Offline' : 'Demo'}</span>
               <span>
                 {offline
-                  ? 'Offline demo · synthetic examples and imported recordings. Playback sends no model requests.'
-                  : 'Read-only demo · explore saved failure scenarios. Private traces and live requests require owner access.'}
+                  ? 'Explore a sample or import a trace. Playback stays in your browser.'
+                  : 'Saved lab traces. Connect as the owner to send requests.'}
               </span>
               {!offline && (
                 <button onClick={() => setSettings(true)}>
@@ -423,51 +392,18 @@ export default function App() {
               </button>
             </div>
           )}
-          <div className="stats-strip">
-            <div>
-              <span>Captured requests</span>
-              <strong>
-                {traces.length}
-                <small>{offline ? 'in this page' : 'latest 100'}</small>
-              </strong>
-            </div>
-            <div>
-              <span>Completed</span>
-              <strong>
-                {successful}
-                <small className="green">with a clean finish</small>
-              </strong>
-            </div>
-            <div>
-              <span>Needs attention</span>
-              <strong>
-                {failed}
-                <small>errors, interruptions & cancellations</small>
-              </strong>
-            </div>
-            <div>
-              <span>Live provider</span>
-              <strong className="provider-name">
-                {offline
-                  ? 'Offline'
-                  : config?.demo
-                    ? 'Owner access'
-                    : config?.liveConfigured
-                      ? config.provider === 'openrouter-free'
-                        ? 'OpenRouter Free'
-                        : 'DeepSeek'
-                      : 'Not configured'}
-                <small>
-                  {offline
-                    ? 'No provider connection'
-                    : config?.demo
-                      ? 'Connect to send live requests'
-                      : config?.liveConfigured
-                        ? config.model
-                        : 'The local lab is ready to use'}
-                </small>
-              </strong>
-            </div>
+          <div className="stats-strip" aria-label="Request summary">
+            <span>
+              <i className="summary-dot completed" />
+              {successful} completed
+            </span>
+            <span>
+              <i className="summary-dot attention" />
+              {failed} need attention
+            </span>
+            <span className="provider-name">
+              {offline ? 'No API connection' : config?.liveConfigured ? config.model : 'Local lab'}
+            </span>
           </div>
 
           <section className="inspector-panel" aria-label="Request inspector">
@@ -482,14 +418,14 @@ export default function App() {
                 <Search size={14} />
                 <input
                   aria-label="Search requests"
-                  placeholder="Search model, ID, status…"
+                  placeholder="Filter requests…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </label>
               <div className="filters">
                 {[
-                  ['all', 'All requests'],
+                  ['all', 'All'],
                   ['failed', 'Attention'],
                   ['live', 'Live'],
                 ].map(([id, label]) => (
@@ -515,16 +451,11 @@ export default function App() {
                     }}
                   >
                     <div className="row-main">
-                      <span className={`row-icon ${failures.has(item.status) ? 'bad' : ''}`}>
-                        {item.status === 'running' ? (
-                          <LoaderCircle className="spin" size={15} />
-                        ) : (
-                          <ArrowDownLeft size={16} />
-                        )}
-                      </span>
                       <div>
-                        <strong>{item.model}</strong>
-                        <span className="mono">{item.id.slice(0, 10)}</span>
+                        <strong>{traceTitle(item)}</strong>
+                        <span className="mono">
+                          {item.scenario ? item.model : item.id.slice(0, 12)}
+                        </span>
                       </div>
                       <span className={`source ${item.source}`}>{item.source}</span>
                     </div>
@@ -551,27 +482,9 @@ export default function App() {
             <div className="detail-column">
               {!selected ? (
                 <div className="empty-state">
-                  <div className="empty-graphic">
-                    <span className="empty-line" />
-                    <span className="empty-box">
-                      <Braces size={27} />
-                    </span>
-                    <span className="empty-line" />
-                    <span className="empty-small">
-                      <Check size={17} />
-                    </span>
-                  </div>
-                  <span className="eyebrow">A SMALL LAB FOR REAL FAILURE PATHS</span>
-                  <h2>
-                    Make a request.
-                    <br />
-                    See the whole story.
-                  </h2>
-                  <p>
-                    Start with a simulated tool call, then explore
-                    <br />
-                    broken streams, timeouts, and cancellations.
-                  </p>
+                  <Braces size={25} strokeWidth={1.4} />
+                  <h2>Select a request</h2>
+                  <p>Inspect the output, timing and raw events, or start with a sample.</p>
                   <button
                     className="primary"
                     disabled={busy || !connected}
@@ -593,14 +506,15 @@ export default function App() {
                 <>
                   <div className="detail-heading">
                     <div>
-                      <span className="eyebrow">TRACE DETAIL</span>
                       <h2>
-                        {detail.model}
+                        {traceTitle(detail)}
                         <span className={`source ${detail.source}`}>
                           {detail.source === 'lab' ? 'Local lab' : 'Live'}
                         </span>
                       </h2>
                       <div className="trace-id mono">
+                        <span>{detail.model}</span>
+                        <span className="trace-id-separator">/</span>
                         {detail.id}
                         <button
                           aria-label="Copy trace ID"
@@ -670,10 +584,6 @@ export default function App() {
                   <div className="detail-body">
                     {tab === 'overview' && (
                       <>
-                        <div className="observation">
-                          <CircleHelp size={16} />
-                          <p>{observation(detail)}</p>
-                        </div>
                         <div className="trace-metrics">
                           <div>
                             <span>Total duration</span>
@@ -698,12 +608,6 @@ export default function App() {
                                   : 'Request needs attention'}
                               </strong>
                               <p>{detail.error}</p>
-                              {detail.httpStatus === 200 && (
-                                <small>
-                                  The HTTP connection started successfully; the stream's final state
-                                  is shown separately.
-                                </small>
-                              )}
                             </div>
                           </div>
                         )}
@@ -753,6 +657,18 @@ export default function App() {
                               </div>
                             ))}
                         </div>
+                        <details className="observation">
+                          <summary>
+                            <CircleHelp size={14} /> Reading this trace
+                          </summary>
+                          <p>{observation(detail)}</p>
+                          {detail.error && detail.httpStatus === 200 && (
+                            <p>
+                              HTTP 200 means the connection started successfully. The stream's final
+                              state is shown separately.
+                            </p>
+                          )}
+                        </details>
                         {detail.truncated && (
                           <div className="capture-note">
                             Capture limit reached. This trace contains a partial recording;
@@ -803,7 +719,7 @@ export default function App() {
             </div>
           </section>
           <footer className="page-footer">
-            <span>HonoBox Inspector · inspect, replay, understand</span>
+            <span className="mono">/v1/chat/completions</span>
             <span>
               <span className="lab-square" /> LAB = synthetic traffic{' '}
               <span className="live-square" /> LIVE = your configured provider
